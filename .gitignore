@@ -1,0 +1,15 @@
+.env
+.kiro
+.vscode/
+.pytest_cache/
+.hypothesis/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+output/
+.DS_Store
+*.log
+*.swp
