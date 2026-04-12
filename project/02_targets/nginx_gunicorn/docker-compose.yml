@@ -1,0 +1,34 @@
+
+
+services:
+  # ── Reverse Proxy ────────────────────────────────────────────────
+  proxy:
+    image: nginx:1.25-alpine
+    container_name: desync_proxy
+    ports:
+      - "8888:80"       # External fuzzer connects to port 8888 → Nginx port 80
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - desync_net
+    # Single-process mode (mirrors HDHunter's -X single-thread flag for Apache)
+    command: ["nginx", "-g", "daemon off;"]
+
+  # ── Backend / Origin Server ───────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: desync_backend
+    ports:
+      - "9001:9001"     # Also expose directly for bypass/diff comparison
+    networks:
+      - desync_net
+    environment:
+      - PYTHONUNBUFFERED=1
+
+networks:
+  desync_net:
+    driver: bridge

@@ -1,0 +1,5 @@
+GET / HTTP/1.1
+HoSt: httpbin.org
+HoSt: httpbin.org
+cOnNeCtIoN: close
+

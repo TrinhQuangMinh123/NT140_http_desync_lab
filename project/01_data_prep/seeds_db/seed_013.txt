@@ -1,0 +1,8 @@
+---[START LINE]---
+GET / HTTP/0.9
+
+---[FIELD LINES]---
+
+
+---[BODY]---
+

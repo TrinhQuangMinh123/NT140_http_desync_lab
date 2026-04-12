@@ -1,0 +1,14 @@
+---[START LINE]---
+HTTP/1.1 200 OK
+
+---[FIELD LINES]---
+Date: Sun, 12 Apr 2026 09:01:01 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 9593
+Connection: close
+Server: gunicorn/19.9.0
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Credentials: true
+
+---[BODY]---
+

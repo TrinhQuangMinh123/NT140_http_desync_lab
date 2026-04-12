@@ -1,0 +1,33 @@
+{
+  "timestamp": "20260412_165018_500387",
+  "seed_index": 10,
+  "mutation_index": 0,
+  "mutation_label": "original",
+  "triggered_rules": [
+    {
+      "rule": 7,
+      "field": "consumed_length",
+      "proxy": 372,
+      "direct": 353,
+      "note": "Raw response size differs \u2014 possible response smuggling"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 372
+  },
+  "direct_state": {
+    "status": 200,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 353
+  }
+}

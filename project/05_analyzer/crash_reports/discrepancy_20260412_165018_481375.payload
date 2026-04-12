@@ -1,0 +1,13 @@
+TRACE / HTTP/1.1
+Host: httpbin.org
+Connection: close
+
+HTTP/1.1 200 OK
+Date: Sun, 12 Apr 2026 09:00:52 GMT
+Content-Type: application/json
+Content-Length: 198
+Connection: close
+Server: gunicorn/19.9.0
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Credentials: true
+

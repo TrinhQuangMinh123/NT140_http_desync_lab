@@ -1,0 +1,6 @@
+GET / HTTP/1.1
+Host: httpbin.org
+Connection: close
+Host: httpbin.org
+Connection: close
+
