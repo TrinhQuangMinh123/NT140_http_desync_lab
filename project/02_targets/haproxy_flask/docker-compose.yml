@@ -1,0 +1,19 @@
+services:
+  proxy:
+    image: haproxy:2.9
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "8890:8890"
+    depends_on:
+      - backend
+
+  backend:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    command: >
+      sh -c "pip install gunicorn -q && gunicorn --bind 0.0.0.0:9003 app:application"
+    ports:
+      - "9003:9003"

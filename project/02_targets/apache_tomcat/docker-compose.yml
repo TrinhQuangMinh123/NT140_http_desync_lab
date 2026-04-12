@@ -1,0 +1,16 @@
+services:
+  proxy:
+    image: httpd:2.4
+    volumes:
+      - ./httpd.conf:/usr/local/apache2/conf/httpd.conf:ro
+    ports:
+      - "8891:8891"
+    depends_on:
+      - backend
+
+  backend:
+    image: tomcat:10.1-jdk17
+    volumes:
+      - ./webapps:/usr/local/tomcat/webapps:ro
+    ports:
+      - "9004:8080"

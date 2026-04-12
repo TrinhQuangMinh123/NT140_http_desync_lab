@@ -1,9 +1,0 @@
----[START LINE]---
-TRACE / HTTP/1.1
-
----[FIELD LINES]---
-Host: httpbin.org
-Connection: close
-
----[BODY]---
-

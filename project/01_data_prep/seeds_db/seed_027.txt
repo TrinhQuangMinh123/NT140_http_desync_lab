@@ -1,9 +1,0 @@
----[START LINE]---
-GET / HTTP/1.1
-
----[FIELD LINES]---
-HoSt: httpbin.org
-cOnNeCtIoN: close
-
----[BODY]---
-

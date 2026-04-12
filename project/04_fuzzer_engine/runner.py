@@ -106,8 +106,12 @@ def load_seeds(seeds_dir: str) -> list:
     for path in sorted(glob.glob(os.path.join(seeds_dir, "seed_*.txt"))):
         with open(path, "rb") as f:
             content = f.read()
-        # Reconstruct wire format from the 3-section seed file
-        raw = _seed_file_to_bytes(content)
+        # New Golden Corpus seeds are raw HTTP bytes — use directly.
+        # Fallback: try the old 3-section parser format.
+        if b"---[START LINE]---" in content:
+            raw = _seed_file_to_bytes(content)
+        else:
+            raw = content
         if raw:
             seeds.append(raw)
     logger.info(f"[*] Loaded {len(seeds)} seeds from {seeds_dir}")
@@ -200,11 +204,12 @@ def mutate_payload(payload: bytes, corpus: list) -> tuple:
 
 # ── Report Writer ─────────────────────────────────────────────────────────────
 
-def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int):
+def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int, target_label: str = ""):
     """Save a discrepancy report to the crash_reports directory."""
     os.makedirs(REPORTS_DIR, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    base = os.path.join(REPORTS_DIR, f"discrepancy_{ts}")
+    label_prefix = f"{target_label}_" if target_label else ""
+    base = os.path.join(REPORTS_DIR, f"discrepancy_{label_prefix}{ts}")
 
     # Save raw payload that triggered the diff
     with open(f"{base}.payload", "wb") as f:
@@ -212,6 +217,7 @@ def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int)
 
     # Save structured report
     report = {
+        "target": label_prefix,
         "timestamp": ts,
         "seed_index": seed_idx,
         "mutation_index": mut_idx,
@@ -244,7 +250,7 @@ def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int)
 
 # ── Main Fuzzing Loop ─────────────────────────────────────────────────────────
 
-def run_fuzzer(seeds: list, num_mutations: int, quiet: bool):
+def run_fuzzer(seeds: list, num_mutations: int, quiet: bool, target_label: str = ""):
     """
     Main differential fuzzing loop.
     Mirrors HDHunter's fuzzer.fuzz_loop() in run.rs.
@@ -255,8 +261,9 @@ def run_fuzzer(seeds: list, num_mutations: int, quiet: bool):
 
     logger.info("=" * 70)
     logger.info(f"  HTTP Desync Differential Fuzzer")
-    logger.info(f"  Proxy    → {PROXY_HOST}:{PROXY_PORT}  (Nginx)")
-    logger.info(f"  Backend  → {BACKEND_HOST}:{BACKEND_PORT}  (Gunicorn direct)")
+    logger.info(f"  Target   → {target_label or 'default'}")
+    logger.info(f"  Proxy    → {PROXY_HOST}:{PROXY_PORT}")
+    logger.info(f"  Backend  → {BACKEND_HOST}:{BACKEND_PORT}")
     logger.info(f"  Seeds    = {len(seeds)}  |  Mutations/seed = {num_mutations}")
     logger.info("=" * 70)
 
@@ -295,7 +302,7 @@ def run_fuzzer(seeds: list, num_mutations: int, quiet: bool):
             if result.is_discrepancy:
                 found += 1
                 print_comparison(result, display_label)
-                save_report(payload, result, label, seed_idx, mut_idx)
+                save_report(payload, result, label, seed_idx, mut_idx, target_label)
             elif not quiet:
                 print_comparison(result, display_label)
 
@@ -325,6 +332,8 @@ def main():
                         help="Backend direct port (default: 9001)")
     parser.add_argument("--quiet", action="store_true",
                         help="Only print discrepancies, skip matching cases")
+    parser.add_argument("--label",        default="",
+                        help="Target environment label (e.g. nginx_gunicorn) for report tagging")
     args = parser.parse_args()
 
     PROXY_PORT   = args.proxy_port
@@ -335,7 +344,7 @@ def main():
         logger.error("[!] No seeds found. Run 01_data_prep/collector.py first.")
         sys.exit(1)
 
-    run_fuzzer(seeds, args.mutations, args.quiet)
+    run_fuzzer(seeds, args.mutations, args.quiet, args.label)
 
 
 if __name__ == "__main__":

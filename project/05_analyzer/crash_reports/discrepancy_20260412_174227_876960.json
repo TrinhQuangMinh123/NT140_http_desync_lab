@@ -1,0 +1,48 @@
+{
+  "target": "",
+  "timestamp": "20260412_174227_876960",
+  "seed_index": 2,
+  "mutation_index": 1,
+  "mutation_label": "byte:byte_duplicate",
+  "triggered_rules": [
+    {
+      "rule": 3,
+      "field": "status",
+      "proxy": 501,
+      "direct": 200,
+      "note": "Proxy and backend returned different HTTP status codes"
+    },
+    {
+      "rule": 4,
+      "field": "transfer_encoding (chunked)",
+      "proxy": null,
+      "direct": false,
+      "note": "Proxy stripped or added Transfer-Encoding before forwarding"
+    },
+    {
+      "rule": 7,
+      "field": "consumed_length",
+      "proxy": 321,
+      "direct": 406,
+      "note": "Raw response size differs \u2014 possible response smuggling"
+    }
+  ],
+  "proxy_state": {
+    "status": 501,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 321
+  },
+  "direct_state": {
+    "status": 200,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": false,
+    "body_length": 0,
+    "consumed_length": 406
+  }
+}

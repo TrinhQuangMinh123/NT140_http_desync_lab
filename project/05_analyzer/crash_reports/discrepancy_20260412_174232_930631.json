@@ -1,0 +1,41 @@
+{
+  "target": "",
+  "timestamp": "20260412_174232_930631",
+  "seed_index": 4,
+  "mutation_index": 2,
+  "mutation_label": "byte:inject_smuggling_prefix",
+  "triggered_rules": [
+    {
+      "rule": 3,
+      "field": "status",
+      "proxy": 200,
+      "direct": 400,
+      "note": "Proxy and backend returned different HTTP status codes"
+    },
+    {
+      "rule": 7,
+      "field": "consumed_length",
+      "proxy": 411,
+      "direct": 286,
+      "note": "Raw response size differs \u2014 possible response smuggling"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 411
+  },
+  "direct_state": {
+    "status": 400,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 286
+  }
+}
