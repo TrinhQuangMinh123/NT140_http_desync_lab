@@ -1,326 +1,118 @@
-# Slide Content — HTTP Desync Differential Fuzzer
-> Nội dung slide bảo vệ đồ án. Tổng ~15 slides.
-> Người làm slide: đọc từng section, lấy bullet points, số liệu và hình minh họa được chỉ định.
+# HTTP Desync Differential Fuzzer — Nội dung báo cáo
 
 ---
 
-## SLIDE 1 — Trang Bìa
+## 1. Giới thiệu vấn đề
 
-**Tiêu đề chính:**
-> HTTP Desync Differential Fuzzer
-> Phát hiện lỗ hổng HTTP Request Smuggling bằng phương pháp Kiểm thử Sai lệch
+Trong kiến trúc web hiện đại, các ứng dụng thường được triển khai theo mô hình nhiều tầng: Client gửi request đến một **Reverse Proxy** (như Nginx, HAProxy), rồi Proxy mới chuyển tiếp về **Backend Server** (như Gunicorn, Tomcat). Cả hai thành phần này đều phải **phân tích cú pháp (parse) gói tin HTTP** trước khi xử lý.
 
-**Ghi chú:**
-- Background: tối, có hình terminal đang chạy hoặc network traffic
-- Logo trường + mã môn học
+Vấn đề nảy sinh khi hai thành phần đó **hiểu khác nhau về cùng một gói tin HTTP**. Hiện tượng này gọi là **HTTP Desync** (mất đồng bộ HTTP) hay còn gọi là **HTTP Request Smuggling**. Kẻ tấn công có thể lợi dụng điểm mù này để:
 
----
+- Vượt qua tường lửa ứng dụng (WAF) và kiểm soát truy cập
+- Chiếm session hoặc đọc response của người dùng khác
+- Chèn một request trái phép ẩn vào luồng HTTP hợp lệ
 
-## SLIDE 2 — Vấn Đề: HTTP Request Smuggling
-
-**Nội dung:**
-- Hệ thống web hiện đại thường có kiến trúc: `Client → Reverse Proxy → Backend Server`
-- Proxy và Backend **đều phải parse HTTP** — nhưng chúng được viết bằng các ngôn ngữ và tuân thủ RFC ở mức độ khác nhau
-- Khi cùng một gói tin HTTP được hai bên hiểu **theo cách khác nhau** → **HTTP Desync** (Sai lệch đồng bộ)
-
-**Hậu quả thực tế:**
-- Kẻ tấn công chèn ẩn một request vào giữa luồng HTTP → **vượt qua WAF, chiếm session người dùng khác, đọc dữ liệu nhạy cảm**
-- Các CVE liên quan: **CVE-2019-9516** (Nginx), **CVE-2022-26377** (Apache), báo cáo HackerOne của Portswigger Research
-
-**Hình minh họa:** Vẽ sơ đồ 3 hộp:
-```
-Client ──→ [ Reverse Proxy ] ──→ [ Backend ]
-                  ↑ thấy 1 req        ↑ thấy 2 req  ← Desync!
-```
+Đây là lớp lỗ hổng đã được ghi nhận trong nhiều CVE nghiêm trọng như **CVE-2019-9516** (Nginx), **CVE-2022-26377** (Apache HTTPD), cũng như hàng loạt báo cáo Bug Bounty từ Portswigger Research trên các nền tảng lớn như HackerOne.
 
 ---
 
-## SLIDE 3 — Tại Sao Khó Phát Hiện?
+## 2. Thách thức và động lực nghiên cứu
 
-**Vấn đề của công cụ hiện tại:**
-- Burp Suite / ZAP chỉ test theo danh sách case **đã biết trước** (manually crafted)
-- Không thể tự khám phá lỗi **mới** trên các cặp Proxy/Backend chưa từng được test
-- Không có công cụ mã nguồn mở nào tự động hóa việc test **nhiều cặp hệ thống cùng lúc**
+Phát hiện lỗi HTTP Desync theo cách thủ công cực kỳ khó khăn vì:
 
-**Giải pháp:** Cần một **Fuzzer tự động** có phương pháp luận học thuật rõ ràng
+- Lỗi không hiển thị rõ ràng, không có thông báo lỗi trực tiếp
+- Cần phải hiểu đồng thời hành vi parse của **cả hai** hệ thống trong cùng một luồng
+- Không gian biến thể payload gây lỗi rất lớn: hàng chục kiểu encoding, tiêu đề HTTP, cấu trúc body khác nhau
 
----
+Các công cụ hiện tại như Burp Suite hay OWASP ZAP chỉ kiểm tra theo danh sách payload **đã biết trước** (manually crafted), không có khả năng **tự khám phá** các biến thể lỗi mới.
 
-## SLIDE 4 — Nền Tảng: HDHunter Paper
-
-**Bài báo gốc:**
-> *"HDHUNTER: Hunting HTTP Desync Vulnerabilities with Differential Fuzzing"*
-> Đăng tại hội nghị bảo mật quốc tế uy tín (USENIX Security / IEEE S&P)
-
-**4 tiêu chí phân loại lỗi của HDHunter:**
-| Tiêu chí | Nội dung |
-|----------|----------|
-| **Taxonomy** | Hình thái Desync: số lượng / nội dung / thứ tự message |
-| **Discrepancies** | Sai lệch kỹ thuật: Non-standard parsing, TE.CL conflict… |
-| **Attacks** | Kịch bản tấn công: Smuggling, Confusing, Response Forgery |
-| **Insights** | Nguyên nhân gốc: Lỗi ngôn ngữ, RFC không chuẩn, chuyển đổi protocol |
-
-**Dự án này:** Tái hiện phương pháp luận của HDHunter bằng Python + Docker — accessible, extensible và chạy được trên mọi máy.
+Câu hỏi đặt ra: Làm sao xây dựng một công cụ có thể **tự động, có hệ thống** kiểm tra hành vi parse HTTP trên nhiều cặp Proxy/Backend khác nhau?
 
 ---
 
-## SLIDE 5 — Differential Testing
+## 3. Phương pháp: Differential Testing
 
-**Định nghĩa:**
-> Gửi **cùng một input** đến hai hệ thống khác nhau → so sánh output → nếu output khác nhau → bug nằm ở đây
+Dự án này áp dụng phương pháp **Differential Testing** (Kiểm thử sai lệch), được đề xuất trong bài báo học thuật **HDHunter** (công bố tại hội nghị bảo mật quốc tế).
 
-**Sơ đồ (vẽ bằng PowerPoint):**
-```
-Mutated Payload
-      │
-      ├──── raw TCP ──→  Reverse Proxy (Nginx) ──→ State Tuple A
-      │
-      └──── raw TCP ──→  Backend (Gunicorn)   ──→ State Tuple B
-                                                         │
-                                              [ diff_checker ] ← 7 Rules
-                                                         │
-                                              Discrepancy Report .json
-```
+Nguyên lý cốt lõi: Gửi **cùng một input** đến hai hệ thống khác nhau qua hai luồng TCP riêng biệt, rồi so sánh output. Nếu output khác nhau mà cùng input, thì lỗi tồn tại ở đây.
 
-**Tại sao dùng Raw TCP?**
-- Các thư viện HTTP Python (requests, httpx) tự sửa header trước khi gửi → che giấu lỗi
-- Raw socket truyền byte-for-byte chính xác như payload đột biến
+Cụ thể trong dự án này:
+- Input: Một gói tin HTTP đã được làm biến dạng (mutated payload)  
+- Hệ thống 1: Gửi qua **Reverse Proxy** (Nginx), Proxy sẽ chuyển tiếp về Backend và trả về response
+- Hệ thống 2: Gửi **thẳng vào Backend** (Gunicorn), bỏ qua Proxy
+
+Cả hai endpoint đều được trang bị một **State Tuple** — một JSON object ghi lại cách hệ thống đó hiểu về gói tin (Content-Length bao nhiêu, Transfer-Encoding có được nhận không, body được đọc bao nhiêu byte, v.v.). Nếu hai State Tuple khác nhau → Desync.
+
+Lý do quan trọng: Toàn bộ giao tiếp được thực hiện bằng **Raw TCP Socket**, tránh việc các thư viện HTTP của Python (như `requests`) tự sửa đổi header trước khi gửi, gây che giấu lỗi.
 
 ---
 
-## SLIDE 6 — Kiến Trúc Hệ Thống (6 Phases)
+## 4. Kiến trúc hệ thống
 
-**Vẽ dạng timeline ngang với 6 ô:**
+Hệ thống được chia thành 7 module độc lập:
 
-| Phase | Module | Chức năng |
-|-------|--------|-----------|
-| 01 | `01_data_prep/collector.py` | Sinh 12 Golden Seeds đại diện 12 edge-case HTTP |
-| 02 | `02_targets/` | 4 cặp Proxy/Backend chạy Docker |
-| 03 | `03_mutator/` | 14 mutation strategies (3 tầng) |
-| 04 | `04_fuzzer_engine/runner.py` | Raw TCP fuzzing + 7-rule diff checker |
-| 05 | `05_analyzer/triage.py` | Phân loại theo HDHunter Taxonomy |
-| 06 | `06_exploits_poc/` | PoC exploit từ payload nguy hiểm nhất |
-| 07 | `07_mini_test_suite/` | Demo độc lập cho thuyết trình |
+**Phase 01 — Data Preparation:** Module `collector.py` tạo ra bộ "Golden Seed Corpus" gồm 12 hạt giống (seeds). Mỗi seed đại diện cho một edge-case đặc thù của giao thức HTTP/1.1 — từ Line Folding, Duplicate Header, Chunked Extension, Trailer Headers cho đến các kịch bản xung đột CL.TE và TE.CL kinh điển. Triết lý thiết kế: **Coverage over Volume** — 12 seeds chất lượng cao hiệu quả hơn hàng nghìn seeds ngẫu nhiên vì mỗi seed nhắm vào một trường hợp parse cụ thể.
 
----
+**Phase 02 — Target Environments:** Bốn cặp Proxy/Backend được dựng bằng Docker Compose:
+- Nginx → Gunicorn (port 8888/9001)
+- HAProxy → Gunicorn (port 8890/9003)
+- Apache Traffic Server → Gevent (port 8889/9002)
+- Apache HTTPD → Tomcat (port 8891/9004)
 
-## SLIDE 7 — Golden Seed Corpus (12 Seeds)
+Tất cả proxy được cấu hình tắt header normalization để lộ hành vi parse thật. Tất cả backend chạy cùng một ứng dụng WSGI trả về State Tuple JSON giúp so sánh đồng nhất.
 
-**Lý do thiết kế 12 Seeds thay vì tạo ngẫu nhiên:**
-> "Coverage > Volume" — 12 seeds nhắm đúng 12 ngóc ngách của RFC HTTP/1.1 hiệu quả hơn 1000 seeds ngẫu nhiên
+**Phase 03 — Mutation Engine:** 14 mutator chia làm 3 tầng. Sequence Level (2 mutators) ghép, cắt các pipeline request. Message Level (4 mutators) thao tác trực tiếp trên Header — nhân đôi, xóa, hoán đổi, thay token. Byte Level (8 mutators, gồm 3 nâng cao) can thiệp ở mức raw byte — chèn Null byte, mã hóa số bằng Unicode full-width (`１０`, `0xa`), giả mạo HTTP/2 preface để qua mặt các C parser. Mỗi lần chạy, một mutator được chọn ngẫu nhiên và áp dụng lên seed, tạo ra biến thể mới.
 
-**Bảng 12 seeds (2 cột):**
+**Phase 04 — Fuzzer Engine:** `runner.py` điều phối toàn bộ vòng lặp fuzzing. Với mỗi seed, nó tạo ra N biến thể đột biến, gửi từng cái qua cả hai đường (Proxy + Backend Direct) và thu thập State Tuple từ hai phía. `diff_checker.py` sau đó áp dụng 7 quy tắc so sánh lấy trực tiếp từ source code Rust của HDHunter (`http_param.rs`). Khi phát hiện sai lệch, toàn bộ thông tin (payload, state tuple hai phía, rule bị kích hoạt) được lưu vào crash report.
 
-| Seed | Edge Case nhắm tới |
-|------|--------------------|
-| seed_01 | Standard GET (baseline) |
-| seed_02 | POST + Content-Length |
-| seed_03 | POST + Transfer-Encoding: chunked |
-| seed_04 | **TE Line Folding** (`TE:\r\n chunked`) |
-| seed_05 | **Absolute URI** (`GET http://host/`) |
-| seed_06 | **Duplicate Content-Length** |
-| seed_07 | **CL.TE Conflict** (classic smuggling) |
-| seed_08 | **TE.CL Conflict** (classic smuggling reversed) |
-| seed_09 | Chunk Extension (`5;ext=evil`) |
-| seed_10 | Trailer Headers (sau body) |
-| seed_11 | **Pipelining** (2 requests trên 1 TCP) |
-| seed_12 | Padded CL (`Content-Length: 00011`) |
+**Phase 05 — Analyzer:** `triage.py` đọc tất cả crash reports và phân loại chúng theo 4 tiêu chí học thuật của HDHunter: Taxonomy (hình thái desync), Primary Discrepancies (sai lệch kỹ thuật), Attacks (kịch bản tấn công), Insights (nguyên nhân gốc rễ).
+
+**Phase 06 — PoC Exploit:** `exploit_smuggling.py` nhận một payload đã phát hiện lỗi, gắn thêm một request ẩn (ví dụ: `POST /admin`), và biểu diễn cơ chế smuggling qua 2 bước TCP để chứng minh rủi ro thực tế.
+
+**Phase 07 — Mini Test Suite:** `test_proxy_backend.py` là script độc lập, không cần chạy toàn bộ hệ thống. Nó hard-code 4 payload kinh điển (Standard, CL.TE, Line Folding, Unicode), bắn vào cả Proxy và Backend rồi in ra bảng so sánh màu để demo trực tiếp trong buổi bảo vệ.
 
 ---
 
-## SLIDE 8 — Mutation Engine (14 Mutators)
+## 5. Công cụ phân loại — 7 Rules và 4 Taxonomy
 
-**3 tầng đột biến:**
+**7 quy tắc so sánh (từ HDHunter `http_param.rs`):**
 
-**Tầng 1 — Sequence Level (2)**
-- `sequence_splice` : Ghép 2 seed thành pipeline
-- `sequence_remove` : Cắt bỏ một phần pipeline
+Mỗi discrepancy được phân tích theo 7 trường của State Tuple. Rule 1 và Rule 2 là nghiêm trọng nhất — khi `message_count` hoặc `message_processed` khác nhau giữa Proxy và Backend, đó là dấu hiệu của Pipeline Desync trực tiếp. Rule 3-6 chỉ ra các sai lệch nhỏ hơn ở status code, Transfer-Encoding, Content-Length và body length. Rule 7 là kổng kích hoạt khi kích thước response thô khác nhau.
 
-**Tầng 2 — Message Level (4)**
-- `field_line_duplicate` : Nhân đôi một header
-- `field_line_remove` : Xóa ngẫu nhiên một header
-- `node_token_replace` : Đổi token (`chunked` → `identity`)
-- `node_typed_swap` : Hoán đổi 2 header với nhau
+**4 tiêu chí phân loại (Taxonomy của HDHunter):**
 
-**Tầng 3 — Byte Level (8) — gồm 3 Advanced ⚡**
-- `byte_insert / remove / duplicate` : Đột biến bit-level
-- `obfuscate_transfer_encoding` : `\tchunked`, `CHunKed`...
-- `perturb_content_length` : `-1`, `999`, `0`
-- ⚡ `obfuscate_whitespace` : Chèn `\x0B`, `\x00` vào tên header
-- ⚡ `obfuscate_unicode_encoding` : `10` → `１０`, `0xa`
-- ⚡ `inject_smuggling_prefix` : HTTP/2.0 preface giả (`PRI * HTTP/2.0`)
-
-**Số test cases:**
-```
-Total = Seeds × (1 + Mutations)
-      = 12 × (1 + 3) = 48 cases  [lần chạy thực nghiệm]
-```
+Taxonomy mô tả hình thái desync là gì (Inconsistent number, Inconsistent content, Response-side). Primary Discrepancies chỉ ra kỹ thuật sai lệch cụ thể (CL.TE conflict, non-standard number parsing, trailer handling). Attacks ánh xạ sai lệch đó về kịch bản tấn công thực tế (Smuggling hay Confusing hay Forgery). Insights đi thẳng vào nguyên nhân gốc — lỗi nằm ở ngôn ngữ lập trình, ở protocol conversion, hay ở sự không tuân thủ RFC.
 
 ---
 
-## SLIDE 9 — Ma Trận Môi Trường (4 Targets)
+## 6. Kết quả thực nghiệm
 
-**Bảng:**
+Thực nghiệm được thực hiện trên môi trường Nginx → Gunicorn với 12 Golden Seeds và 3 mutations/seed (48 test cases tổng).
 
-| # | Reverse Proxy | Backend | Proxy Port | Backend Port |
-|---|---------------|---------|------------|--------------|
-| 1 | **Nginx 1.25** | Gunicorn (WSGI) | 8888 | 9001 |
-| 2 | **HAProxy 2.9** | Gunicorn (WSGI) | 8890 | 9003 |
-| 3 | **Apache Traffic Server** | Gevent (Python) | 8889 | 9002 |
-| 4 | **Apache HTTPD 2.4** | Apache Tomcat 10 | 8891 | 9004 |
+- **40/48 test cases kích hoạt discrepancy** — hit rate 83%
+- Tổng cộng **113 discrepancies** được ghi nhận (bao gồm các lần chạy trước đó)
 
-**Điểm quan trọng:**
-- Tất cả proxy được cấu hình **tắt header normalization** → để lộ hành vi parse thật
-- Tất cả backend cùng trả về **State Tuple JSON** → so sánh được đồng nhất
+Phân loại theo Taxonomy:
+- Request-side Inconsistent number: **25 reports (22.1%)** — Mức nghiêm trọng cao nhất (kích hoạt Rule 1+2)
+- Request-side Inconsistent content: **13 reports (11.5%)**
+- Response-side length discrepancy: **75 reports (66.4%)**
 
----
+Phân loại theo Attacks:
+- Request Smuggling: **25 reports (22.1%)**
+- Request Confusing: **40 reports (35.4%)**
+- Response Stealing/Forgery: **48 reports (42.5%)**
 
-## SLIDE 10 — Demo / Kết Quả Chạy
+Phân loại theo Root Causes:
+- Protocol translation issues (Proxy vs WSGI): **73 (64.6%)**
+- Number Parsing quirks: **26 (23%)**
+- Non-standard RFC compliance: **14 (12.4%)**
 
-**Screenshot terminal (chụp sẵn, dán vào slide):**
-
-```
-============================================================
-  HTTP Desync Differential Fuzzer
-  Target   → nginx_gunicorn
-  Proxy    → 127.0.0.1:8888
-  Backend  → 127.0.0.1:9001
-  Seeds    = 12  |  Mutations/seed = 3
-============================================================
-
-🔴 DISCREPANCY [seed 08  mut 05  [byte:inject_smuggling_prefix]]
-  Field              Proxy (Nginx)    Backend (Direct)
-  ──────────────────────────────────────────────────
-  1. status          400              0
-  2. message_count   1                0             ← DESYNC!
-  3. message_processed 1              0             ← DESYNC!
-  7. consumed_length 309              391
-
-  Triggered Rules:
-    Rule 1: Pipeline desync — proxy saw different number of messages
-    Rule 2: One endpoint processed more complete messages
-    Rule 3: Proxy and backend returned different HTTP status codes
-```
-
-**Kết quả tổng:**
-```
-[✓] Fuzzing Complete
-    Total test cases : 48
-    Discrepancies    : 40  🔴   ← Hit rate: 83%
-    Skipped (timeout): 0
-```
+**Case Study tiêu biểu:** Payload được tạo bởi mutator `inject_smuggling_prefix` — nó chèn HTTP/2 Connection Preface (`PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n`) vào đầu gói TE.CL conflict. Nginx phân tích được preamble đó như một yêu cầu không hợp lệ và trả về `400 Bad Request` (message_count=1). Gunicorn bỏ qua preamble và timeout luôn (message_count=0). Kết quả: Rule 1, 2, 3 đồng loạt kích hoạt — Pipeline Desync hoàn toàn.
 
 ---
 
-## SLIDE 11 — Phân Loại Kết Quả (Triage)
+## 7. Kết luận và hướng phát triển
 
-**Số liệu thực nghiệm (113 discrepancies tổng):**
+Dự án đã xây dựng thành công một framework Differential Fuzzer mã nguồn mở cho HTTP Desync, bao gồm bộ 12 Golden Seeds theo hướng Coverage-oriented, 14 mutation strategies với 3 advanced mutators cho C/C++ parsers, phân loại kết quả đúng chuẩn học thuật HDHunter, và ma trận 4 môi trường Docker mở rộng được.
 
-**1. Taxonomy:**
-- Request-side: Inconsistent number of messages — **25 (22.1%)** 🔴
-- Request-side: Inconsistent message content — **13 (11.5%)**
-- Response-side: Length discrepancy — **75 (66.4%)**
-
-**2. Primary Discrepancies:**
-- Incomplete sanitization / Validation Bypass — **50 (44.2%)**
-- Raw byte difference — **48 (42.5%)**
-- Non-standard number parsing — **12 (10.6%)**
-- Differing TE.CL strategies — **3 (2.7%)**
-
-**3. Attacks:**
-- Response Stealing / Forgery — **48 (42.5%)**
-- Request Confusing — **40 (35.4%)**
-- **Request Smuggling — 25 (22.1%)** 🔴
-
-**4. Root Causes:**
-- Protocol translation (Proxy vs WSGI) — **73 (64.6%)**
-- Number Parsing quirks — **26 (23%)**
-- Non-standard RFC compliance — **14 (12.4%)**
-
-> **Gợi ý người làm slide:** Vẽ lại 4 mục trên dạng 4 Donut Chart nhỏ bằng PowerPoint / Google Sheet.
-
----
-
-## SLIDE 12 — Case Study: Pipeline Desync
-
-**Payload kích hoạt lỗi (từ `crash_reports/*.json`):**
-
-```
-Mutator    : byte:inject_smuggling_prefix
-Seed       : seed_08 (TE.CL Conflict)
-```
-
-**Payload thực tế được gửi qua TCP:**
-```
-PRI * HTTP/2.0\r\n          ← Giả mạo HTTP/2 Connection Preface
-\r\n
-SM\r\n
-\r\n
-POST / HTTP/1.1\r\n         ← Request thật ẩn sau preamble rác
-Host: localhost\r\n
-Content-Length: 3\r\n
-Transfer-Encoding: chunked\r\n
-\r\n
-5\r\n
-12345\r\n
-0\r\n
-\r\n
-```
-
-**Nginx (Proxy) nhìn thấy:**
-- Gói HTTP/2.0 Preface → reject, trả `400 Bad Request`
-- `message_count = 1`, `status = 400`
-
-**Gunicorn (Backend nhận trực tiếp):**
-- Bỏ qua Preface, đọc thẳng vào POST → timeout/drop
-- `message_count = 0`, `status = 0`
-
-**→ Triggered Rule 1 + Rule 2 + Rule 3: PIPELINE DESYNC**
-
----
-
-## SLIDE 13 — Kết Luận
-
-**Đóng góp của đề tài:**
-1. Framework Differential Fuzzer mã nguồn mở bằng Python + Docker
-2. Bộ 12 Golden Seeds có phương pháp luận Coverage-oriented
-3. 14 Mutators (gồm 3 Advanced bypass C/C++ parsers)
-4. Phân loại đúng chuẩn học thuật HDHunter Taxonomy
-5. Ma trận 4 môi trường: Nginx, HAProxy, ATS, Apache HTTPD
-
-**Kết quả thực nghiệm:**
-- **113 discrepancies** phát hiện được
-- **25 Request Smuggling** (Rule 1+2) — mức nguy hiểm cao nhất
-- Hit rate: **83%** trên Golden Corpus
-
----
-
-## SLIDE 14 — Hướng Phát Triển
-
-- **Scale thêm targets:** ATS + Gevent, Apache HTTPD + Tomcat (đã dựng Docker, chưa chạy thực nghiệm)
-- **HTTP/2 H2C Downgrade seeds:** Nginx downgrade từ H2 xuống H1.1 → nguồn lỗi chưa được khai thác
-- **Genetic Algorithm Mutator:** Dùng payload bắt được Rule 1/2 làm mẹ, lai chéo để tạo payload mạnh hơn
-- **CI/CD Integration:** Chạy fuzzer tự động mỗi khi cập nhật phiên bản Proxy mới
-
----
-
-## SLIDE 15 — Demo Live (nếu có)
-
-**Lệnh chạy trực tiếp trên máy:**
-```bash
-# Demo mini test suite (chạy < 5 giây)
-python3 project/07_mini_test_suite/test_proxy_backend.py
-
-# Output mong đợi:
-# [Test Case] 2. Classic CL.TE Smuggling
-# ─────────────────────────────────────────────────────────
-#  Proxy (Nginx)  : [HTTP/1.1 400 Bad Request] (No JSON)
-#  Backend (WSGI) : [HTTP/1.1 200 OK] | Parsed CL: 42 | Parsed TE: chunked
-#  --> DISCREPANCY DETECTED!
-```
-
-**Kịch bản thuyết trình:**
-> "Đây là cùng một gói tin, cùng một payload CL.TE Smuggling kinh điển. Nginx từ chối và trả 400 — nó thấy header xung đột. Gunicorn thì chấp nhận và đọc theo Transfer-Encoding. Đây chính là điểm mù mà kẻ tấn công khai thác."
-
----
-*File này dùng để làm nội dung slide — số liệu lấy từ lần chạy thực nghiệm ngày 12/04/2026.*
+Hướng phát triển tiếp theo bao gồm mở rộng thực nghiệm sang ATS và Apache Tomcat, thêm seeds cho HTTP/2 H2C Downgrade, áp dụng Genetic Algorithm để tự tiến hóa payload từ các bug đã tìm được, và tích hợp vào CI/CD pipeline để tự động kiểm tra mỗi khi cập nhật phiên bản proxy.
