@@ -1,6 +1,6 @@
 # HTTP Desync Lab
 
-Dự án này là một môi trường thực hành (lab) được thiết kế theo dạng module giúp bạn tìm hiểu và mô phỏng các cuộc tấn công **HTTP Request Smuggling** (hay còn gọi là HTTP Desync - Trượt đồng bộ HTTP). 
+Dự án này là một môi trường thực hành (lab) được thiết kế theo dạng module giúp bạn tìm hiểu và mô phỏng các cuộc tấn công **HTTP Request Smuggling** 
 
 ## Tổng quan
 
