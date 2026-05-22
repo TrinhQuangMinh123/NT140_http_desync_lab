@@ -2,16 +2,16 @@
 """
 runner.py - HTTP Desync Differential Fuzzer
 --------------------------------------------
-Mirrors HDHunter's DiffExecutor + StdPowerMutationalStage pipeline.
+HDHunter-inspired differential fuzzing pipeline.
 
 Flow:
     1. Load seeds from seeds_db/
     2. Apply mutation strategies from 03_mutator/
     3. Send mutated payload via Raw TCP to:
-           - Proxy endpoint  (Nginx port 8888)  ← DiffExecutor/first
-           - Backend direct  (Gunicorn port 9001) ← DiffExecutor/second
+           - Proxy endpoint  (Nginx port 8888)
+           - Backend direct  (Gunicorn port 9001)
     4. Parse both responses into StateTuples
-    5. Run diff_checker rules → flag discrepancies
+    5. Run adapted diff_checker rules → flag discrepancies
     6. Save interesting inputs to 05_analyzer/crash_reports/
 
 HDHunter Reference:
@@ -23,11 +23,14 @@ import os
 import sys
 import glob
 import json
+import re
 import socket
 import time
+import uuid
 import random
 import argparse
 import logging
+import hashlib
 from datetime import datetime
 
 # ── Resolve import paths ──────────────────────────────────────────────────────
@@ -52,7 +55,9 @@ BACKEND_PORT  = 9001      # Gunicorn direct
 SEEDS_DIR     = os.path.join(ROOT, "01_data_prep", "seeds_db")
 REPORTS_DIR   = os.path.join(ROOT, "05_analyzer", "crash_reports")
 SOCKET_TIMEOUT = 5.0
-MAX_MUTATIONS  = 3        # mutations per seed (mirrors PowerSchedule rounds)
+MAX_MUTATIONS  = 3        # mutations per seed
+DEFAULT_RANDOM_SEED = 1337
+DEFAULT_REPEAT_COUNT = 1
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -65,7 +70,7 @@ def send_raw(host: str, port: int, payload: bytes) -> tuple:
     """
     Open a raw TCP connection and transmit the payload byte-for-byte.
     Returns (raw_response_bytes, timed_out).
-    Mirrors HDHunter's STNyxExecutor which bypasses any HTTP library.
+    Uses raw TCP to bypass client-side HTTP normalization.
     """
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -146,7 +151,7 @@ def _seed_file_to_bytes(content: bytes) -> bytes:
 
 # ── Mutation Engine ───────────────────────────────────────────────────────────
 
-# All available message-level mutators (mirrors HDHunter's HttpMutatorsTupleType)
+# All available message-level mutators used by this fuzzer.
 MESSAGE_MUTATORS = [
     field_line_duplicate,
     field_line_remove,
@@ -170,7 +175,7 @@ def mutate_payload(payload: bytes, corpus: list) -> tuple:
     """
     Apply a random mutation strategy from the 3 levels.
     Returns (mutated_bytes, mutation_label).
-    Mirrors HDHunter's StdScheduledMutator with http_mutations() tuple.
+    Select a mutation from the project mutator set.
     """
     level = random.choice(["sequence", "message", "byte"])
 
@@ -202,9 +207,88 @@ def mutate_payload(payload: bytes, corpus: list) -> tuple:
         return mutator(payload), f"byte:{mutator.__name__}"
 
 
+# ── X-Desync-Id Injection (paper §4.4.1 — Order tracking) ────────────────────
+
+# Match the start of an HTTP/1.x request line. The lookbehind via lookahead
+# in split() lets us keep the request line attached to its segment.
+_REQUEST_LINE_RE = re.compile(
+    rb"(?=[A-Z]{3,10} \S+ HTTP/1\.[01]\r\n)"
+)
+
+
+def inject_desync_ids(payload: bytes) -> bytes:
+    """
+    Inject a unique `X-Desync-Id: <uuid>` header into every HTTP request in
+    `payload`. For pipelined seeds this produces a per-message UUID so the
+    fuzzer can reconstruct the response order (paper §4.4.1).
+
+    Skip messages that already carry the header. Leave malformed payloads
+    untouched so byte-mutators can still trigger parser errors.
+    """
+    if not payload:
+        return payload
+
+    segments = _REQUEST_LINE_RE.split(payload)
+    out = []
+    for seg in segments:
+        if not seg:
+            continue
+        # Skip if it doesn't look like a request OR already has the header
+        if b" HTTP/1." not in seg or b"X-Desync-Id:" in seg:
+            out.append(seg)
+            continue
+        # Locate end-of-headers
+        sep = seg.find(b"\r\n\r\n")
+        if sep < 0:
+            out.append(seg)
+            continue
+        header = (
+            b"X-Desync-Id: " + uuid.uuid4().hex.encode() + b"\r\n"
+        )
+        out.append(seg[:sep + 2] + header + seg[sep + 2:])
+    return b"".join(out)
+
+
 # ── Report Writer ─────────────────────────────────────────────────────────────
 
-def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int, target_label: str = ""):
+def execute_payload(payload: bytes):
+    """Run one payload through proxy and direct backend once."""
+    tagged = inject_desync_ids(payload)
+    proxy_raw,  proxy_to  = send_raw(PROXY_HOST,   PROXY_PORT,   tagged)
+    direct_raw, direct_to = send_raw(BACKEND_HOST, BACKEND_PORT, tagged)
+
+    if proxy_to and direct_to:
+        return None, True
+
+    proxy_state  = StateTuple.from_raw_response(proxy_raw,  proxy_to)
+    direct_state = StateTuple.from_raw_response(direct_raw, direct_to)
+    return compare(proxy_state, direct_state), False
+
+
+def summarize_repeats(results: list, repeat_attempts: int, skipped_repeats: int) -> dict:
+    """Summarize repeat-run stability for one logical test case."""
+    discrepancy_runs = [r for r in results if r.is_discrepancy]
+    rule_sets = []
+    for r in discrepancy_runs:
+        rule_sets.append(tuple(sorted(rule["rule"] for rule in r.triggered_rules)))
+
+    unique_rule_sets = sorted(set(rule_sets))
+    return {
+        "repeat_attempts": repeat_attempts,
+        "completed_repeats": len(results),
+        "skipped_repeats": skipped_repeats,
+        "discrepancy_runs": len(discrepancy_runs),
+        "stable_discrepancy": (
+            repeat_attempts > 0
+            and skipped_repeats == 0
+            and len(discrepancy_runs) == repeat_attempts
+        ),
+        "unique_rule_sets": [list(rule_set) for rule_set in unique_rule_sets],
+    }
+
+
+def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int,
+                target_label: str = "", metadata: dict | None = None):
     """Save a discrepancy report to the crash_reports directory."""
     os.makedirs(REPORTS_DIR, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -217,11 +301,12 @@ def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int,
 
     # Save structured report
     report = {
-        "target": label_prefix,
+        "target": target_label,
         "timestamp": ts,
         "seed_index": seed_idx,
         "mutation_index": mut_idx,
         "mutation_label": label,
+        "payload_sha256": hashlib.sha256(payload).hexdigest(),
         "triggered_rules": result.triggered_rules,
         "proxy_state": {
             "status":            result.proxy.status,
@@ -231,6 +316,9 @@ def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int,
             "transfer_encoding": result.proxy.transfer_encoding,
             "body_length":       result.proxy.body_length,
             "consumed_length":   result.proxy.consumed_length,
+            "order":             result.proxy.order,
+            "body_hash":         result.proxy.body_hash,
+            "wsgi_eof":          result.proxy.wsgi_eof,
         },
         "direct_state": {
             "status":            result.direct.status,
@@ -240,22 +328,29 @@ def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int,
             "transfer_encoding": result.direct.transfer_encoding,
             "body_length":       result.direct.body_length,
             "consumed_length":   result.direct.consumed_length,
+            "order":             result.direct.order,
+            "body_hash":         result.direct.body_hash,
+            "wsgi_eof":          result.direct.wsgi_eof,
         },
     }
+    if metadata:
+        report["repeat_analysis"] = metadata
     with open(f"{base}.json", "w") as f:
         json.dump(report, f, indent=2)
 
-    logger.info(f"  [💾] Report saved → {base}.json")
+    logger.info(f"  [save] Report saved -> {base}.json")
 
 
 # ── Main Fuzzing Loop ─────────────────────────────────────────────────────────
 
-def run_fuzzer(seeds: list, num_mutations: int, quiet: bool, target_label: str = ""):
+def run_fuzzer(seeds: list, num_mutations: int, quiet: bool,
+               target_label: str = "", repeat_count: int = 1):
     """
     Main differential fuzzing loop.
-    Mirrors HDHunter's fuzzer.fuzz_loop() in run.rs.
+    Main fuzzing loop inspired by HDHunter's differential executor design.
     """
     total   = 0
+    executions = 0
     found   = 0
     skipped = 0
 
@@ -265,6 +360,7 @@ def run_fuzzer(seeds: list, num_mutations: int, quiet: bool, target_label: str =
     logger.info(f"  Proxy    → {PROXY_HOST}:{PROXY_PORT}")
     logger.info(f"  Backend  → {BACKEND_HOST}:{BACKEND_PORT}")
     logger.info(f"  Seeds    = {len(seeds)}  |  Mutations/seed = {num_mutations}")
+    logger.info(f"  Repeats  = {repeat_count} per logical test case")
     logger.info("=" * 70)
 
     for seed_idx, seed in enumerate(seeds):
@@ -281,36 +377,46 @@ def run_fuzzer(seeds: list, num_mutations: int, quiet: bool, target_label: str =
             total += 1
             display_label = f"seed {seed_idx+1:02d}  mut {mut_idx:02d}  [{label}]"
 
-            # ── Send to both endpoints simultaneously ─────────────────────────
-            proxy_raw,  proxy_to  = send_raw(PROXY_HOST,   PROXY_PORT,   payload)
-            direct_raw, direct_to = send_raw(BACKEND_HOST, BACKEND_PORT, payload)
+            repeat_results = []
+            repeat_skips = 0
+            for repeat_idx in range(repeat_count):
+                executions += 1
+                result, skipped_run = execute_payload(payload)
+                if skipped_run:
+                    repeat_skips += 1
+                    continue
+                repeat_results.append(result)
 
-            # Skip if both timed out (environment error, not a desync)
-            if proxy_to and direct_to:
+            if not repeat_results:
                 skipped += 1
                 if not quiet:
-                    logger.info(f"  [skip]  {display_label}  — both endpoints timed out")
+                    logger.info(f"  [skip]  {display_label}  -- both endpoints timed out")
                 continue
 
-            # ── Build State Tuples ────────────────────────────────────────────
-            proxy_state  = StateTuple.from_raw_response(proxy_raw,  proxy_to)
-            direct_state = StateTuple.from_raw_response(direct_raw, direct_to)
-
-            # ── Apply 7 Differential Rules ────────────────────────────────────
-            result = compare(proxy_state, direct_state)
+            summary = summarize_repeats(repeat_results, repeat_count, repeat_skips)
+            result = next((r for r in repeat_results if r.is_discrepancy), repeat_results[0])
 
             if result.is_discrepancy:
                 found += 1
                 print_comparison(result, display_label)
-                save_report(payload, result, label, seed_idx, mut_idx, target_label)
+                if repeat_count > 1 and not summary["stable_discrepancy"]:
+                    logger.info(
+                        f"  [unstable] discrepancy reproduced "
+                        f"{summary['discrepancy_runs']}/{summary['repeat_attempts']} runs"
+                    )
+                metadata = {
+                    **summary,
+                }
+                save_report(payload, result, label, seed_idx, mut_idx, target_label, metadata)
             elif not quiet:
                 print_comparison(result, display_label)
 
     logger.info("\n" + "=" * 70)
     logger.info(f"  [✓] Fuzzing Complete")
-    logger.info(f"      Total test cases : {total}")
-    logger.info(f"      Discrepancies    : {found}  🔴")
-    logger.info(f"      Skipped (timeout): {skipped}")
+    logger.info(f"      Logical test cases : {total}")
+    logger.info(f"      Raw executions     : {executions}")
+    logger.info(f"      Discrepancies      : {found}")
+    logger.info(f"      Skipped cases      : {skipped}")
     logger.info(f"      Reports saved in : {REPORTS_DIR}/")
     logger.info("=" * 70)
 
@@ -334,17 +440,27 @@ def main():
                         help="Only print discrepancies, skip matching cases")
     parser.add_argument("--label",        default="",
                         help="Target environment label (e.g. nginx_gunicorn) for report tagging")
+    parser.add_argument("--random-seed", type=int, default=DEFAULT_RANDOM_SEED,
+                        help=f"Seed for deterministic mutation selection (default: {DEFAULT_RANDOM_SEED})")
+    parser.add_argument("--repeat", type=int, default=DEFAULT_REPEAT_COUNT,
+                        help="Repeat each logical test case N times to measure stability (default: 1)")
     args = parser.parse_args()
 
     PROXY_PORT   = args.proxy_port
     BACKEND_PORT = args.backend_port
+    random.seed(args.random_seed)
+
+    if args.repeat < 1:
+        logger.error("[!] --repeat must be >= 1")
+        sys.exit(1)
 
     seeds = load_seeds(args.seeds)
     if not seeds:
         logger.error("[!] No seeds found. Run 01_data_prep/collector.py first.")
         sys.exit(1)
 
-    run_fuzzer(seeds, args.mutations, args.quiet, args.label)
+    logger.info(f"[*] Random seed = {args.random_seed}")
+    run_fuzzer(seeds, args.mutations, args.quiet, args.label, args.repeat)
 
 
 if __name__ == "__main__":

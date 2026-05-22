@@ -1,0 +1,48 @@
+{
+  "target": "haproxy_flask_",
+  "timestamp": "20260415_013126_987318",
+  "seed_index": 11,
+  "mutation_index": 1,
+  "mutation_label": "sequence:splice",
+  "triggered_rules": [
+    {
+      "rule": 1,
+      "field": "message_count",
+      "proxy": 2,
+      "direct": 1,
+      "note": "Pipeline desync \u2014 proxy saw different number of HTTP messages"
+    },
+    {
+      "rule": 2,
+      "field": "message_processed",
+      "proxy": 2,
+      "direct": 1,
+      "note": "One endpoint processed more complete messages than the other"
+    },
+    {
+      "rule": 7,
+      "field": "consumed_length",
+      "proxy": 784,
+      "direct": 409,
+      "note": "Raw response size differs \u2014 possible response smuggling"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "message_count": 2,
+    "message_processed": 2,
+    "content_length": -1,
+    "transfer_encoding": true,
+    "body_length": 5,
+    "consumed_length": 784
+  },
+  "direct_state": {
+    "status": 200,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": true,
+    "body_length": 5,
+    "consumed_length": 409
+  }
+}

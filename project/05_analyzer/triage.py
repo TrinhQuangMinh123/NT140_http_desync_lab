@@ -3,11 +3,12 @@
 triage.py - HTTP Desync Taxonomy Classification (HDHunter)
 -----------------------------------------------------------
 Analyzes fuzzer-generated JSON crash reports and classifies them according
-to the 4 primary academic criteria defined in the HDHunter paper:
+to 4 HDHunter-inspired criteria. The labels are prioritization hints, not
+proof that a report is exploitable:
 1. Taxonomy (Desync Shapes)
 2. Primary Discrepancies (Technical Deviations)
-3. Attacks (Exploit Scenarios)
-4. Insights (Root Causes)
+3. Attack Candidates (Exploitability Signals)
+4. Insights (Hypothesized Root Causes)
 """
 
 import os
@@ -62,18 +63,18 @@ def classify_discrepancy(report: dict) -> str:
 
 
 def classify_attack(report: dict) -> str:
-    """3. Attacks (Exploit Scenarios)"""
+    """3. Attack candidates (exploitability signals, not proof)"""
     rules = [r["rule"] for r in report.get("triggered_rules", [])]
     
     if 1 in rules or 2 in rules:
-        return "Request Smuggling (Unauthorized request injection)"
+        return "Request Smuggling candidate (requires replay/PoC)"
     elif 3 in rules or 4 in rules or 5 in rules or 6 in rules:
-        return "Request Confusing (Bypassing application logic)"
-    return "Response Stealing / Forgery (Potential via length discrepancy)"
+        return "Request Confusing candidate (requires semantic validation)"
+    return "Response Stealing/Forgery candidate (requires response-queue PoC)"
 
 
 def classify_insight(report: dict) -> str:
-    """4. Insights (Root Causes)"""
+    """4. Insights (hypothesized root causes)"""
     mut_label = report.get("mutation_label", "").lower()
     
     if "perturb_content_length" in mut_label or "byte" in mut_label:
@@ -97,21 +98,63 @@ def print_section(title, counter, total):
         print(f"  {color}► {category}: {count} reports ({percentage:.1f}%)\033[0m")
 
 
+def print_stability_summary(reports):
+    """Print repeat-run stability when reports contain repeat metadata."""
+    repeat_reports = [r for r in reports if r.get("repeat_analysis")]
+    if not repeat_reports:
+        return
+
+    stable = 0
+    unstable = 0
+    total_discrepancy_runs = 0
+    total_completed_repeats = 0
+    for report in repeat_reports:
+        analysis = report["repeat_analysis"]
+        total_discrepancy_runs += analysis.get("discrepancy_runs", 0)
+        total_completed_repeats += analysis.get(
+            "completed_repeats",
+            analysis.get("repeat_count", 0),
+        )
+        if analysis.get("stable_discrepancy"):
+            stable += 1
+        else:
+            unstable += 1
+
+    print("\n\033[1;96m5. Repeat Stability\033[0m")
+    print("=" * 60)
+    print(f"  Reports with repeat metadata: {len(repeat_reports)}")
+    print(f"  Stable discrepancies: {stable}")
+    print(f"  Unstable discrepancies: {unstable}")
+    if total_completed_repeats:
+        rate = (total_discrepancy_runs / total_completed_repeats) * 100
+        print(f"  Reproduction rate across completed repeated runs: {rate:.1f}%")
+
+
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Triage HTTP Desync crash reports")
+    parser.add_argument("--label", default="", help="Filter reports by target label (e.g., nginx_gunicorn)")
+    args = parser.parse_args()
+
     if not os.path.exists(REPORTS_DIR):
         print(f"[!] Crash reports directory not found at: {REPORTS_DIR}")
         return
 
     json_files = glob.glob(os.path.join(REPORTS_DIR, "*.json"))
+    if args.label:
+        json_files = [f for f in json_files if args.label in os.path.basename(f)]
+
     if not json_files:
-        print(f"[!] No JSON reports found in {REPORTS_DIR}")
+        print(f"[!] No JSON reports found in {REPORTS_DIR} for label '{args.label}'")
         return
 
     reports = parse_reports(json_files)
     total = len(reports)
     
     print("=" * 70)
-    print("  HDHUNTER TAXONOMY & HTTP DESYNC ANALYSIS")
+    print("  HDHUNTER-INSPIRED TAXONOMY & HTTP DESYNC ANALYSIS")
+    if args.label:
+        print(f"  Target Filter: {args.label}")
     print(f"  Total discrepancies analyzed: {total}")
     print("=" * 70)
 
@@ -129,19 +172,24 @@ def main():
 
     print_section("1. Taxonomy (Desync Shapes)", tax_count, total)
     print_section("2. Primary Discrepancies (Technical Deviations)", disc_count, total)
-    print_section("3. Attacks (Exploit Scenarios)", atk_count, total)
-    print_section("4. Insights (Root Causes)", ins_count, total)
+    print_section("3. Attack Candidates (Exploitability Signals)", atk_count, total)
+    print_section("4. Insights (Hypothesized Root Causes)", ins_count, total)
+    print_stability_summary(reports)
 
-    # Highlight a classic Request Smuggling example
-    print("\n\033[1;93m[*] Notable Request Smuggling Example (Pipeline Desync):\033[0m")
+    # Highlight a candidate that should be replayed manually.
+    print("\n\033[1;93m[*] Notable Request Smuggling Candidate (Pipeline Desync Signal):\033[0m")
+    found_candidate = False
     for r in reports:
         if "Inconsistent number" in classify_taxonomy(r):
+            found_candidate = True
             print(f"  - File: {r['filename']}")
             print(f"  - Mutator used: {r.get('mutation_label')}")
             proxy_count = r['proxy_state']['message_count']
             direct_count = r['direct_state']['message_count']
-            print(f"  - Detail: Proxy detected {proxy_count} request(s), but Backend detected {direct_count} request(s).")
+            print(f"  - Detail: Proxy detected {proxy_count} request(s), but Backend detected {direct_count} request(s). Replay/PoC is required before calling this exploitable.")
             break 
+    if not found_candidate:
+        print("  - None in the selected report set.")
     print()
 
 if __name__ == "__main__":

@@ -2,12 +2,14 @@
 """
 diff_checker.py - State Tuple Differential Analyzer
 -----------------------------------------------------
-Implements HDHunter's HttpParamFeedback.is_interesting() rules in Python.
+Adapts HDHunter's HttpParamFeedback.is_interesting() idea in Python.
 
 HDHunter Reference:
     hdhunter/src/feedbacks/http_param.rs (lines 86-97)
 
-The 7 State Tuple fields compared (mirroring HDHunter's HttpParam struct):
+The 7 State Tuple fields compared are HDHunter-inspired, but the source
+of truth is externally observed socket/backend JSON data rather than
+instrumented parser state from shared memory:
 
     Field                  | HDHunter                    | Our Source
     -----------------------|-----------------------------|---------------------------
@@ -29,7 +31,7 @@ import json
 class StateTuple:
     """
     Parsed HTTP state as seen by one endpoint (proxy or backend direct).
-    Mirrors HDHunter's HttpParam struct from hdhunter-rt.
+    Lightweight adaptation of HDHunter's HttpParam struct from hdhunter-rt.
     """
     # Field 1: HTTP status code (0 = timeout/connection error)
     status: int = 0
@@ -51,6 +53,19 @@ class StateTuple:
 
     # Field 7: Total raw bytes in the response body from the proxy/server
     consumed_length: int = 0
+
+    # Field 8 (paper §4.4.1 "Order"): list of X-Desync-Id values in order received.
+    # Populated from response headers; empty if no pipelining/UUID injection used.
+    order: list = field(default_factory=list)
+
+    # Field 9 (paper §4.4.1 "Body" content): sha256[:16] of body bytes the backend
+    # actually consumed. Catches content discrepancies even when length matches.
+    body_hash: str = ""
+
+    # A5: was there data left over in wsgi.input after the main read?
+    # True = clean EOF (backend agrees with CL), False = leftover bytes in stream.
+    # None = unknown / not provided by backend.
+    wsgi_eof: Optional[bool] = None
 
     # Extra context (not in HDHunter, but useful for reporting)
     timed_out: bool = False
@@ -83,33 +98,91 @@ class StateTuple:
             if status_lines:
                 st.status = int(status_lines[0])
 
-            # Try to parse the JSON body from our backend app
-            if "\r\n\r\n" in text:
-                body_text = text.split("\r\n\r\n", 1)[1]
-                # Handle chunked transfer from Nginx
-                body_text = _strip_chunked_envelope(body_text)
-                if body_text.strip().startswith("{"):
-                    data = json.loads(body_text.strip())
-                    st.backend_json = data
+            # A1: Order — extract every X-Desync-Id header in arrival order.
+            # Paper §4.4.1: Order = collection of X-Desync-Id values, used to
+            # detect response reordering (Response Stealing candidate).
+            order_matches = re.findall(
+                r"^X-Desync-Id:\s*([^\r\n]+)",
+                text,
+                flags=re.IGNORECASE | re.MULTILINE,
+            )
+            st.order = [v.strip() for v in order_matches]
 
-                    # Field 4: content_length
-                    cl = data.get("content_length")
-                    st.content_length = int(cl) if cl not in (None, "") else -1
+            # Try to parse the JSON body(ies) from our backend app.
+            # When pipelining, multiple JSON bodies may appear back-to-back.
+            # We aggregate body_length/body_hash across all parsed messages.
+            json_bodies = _extract_json_bodies(text)
 
-                    # Field 5: transfer_encoding
-                    te = data.get("transfer_encoding")
-                    if te is None:
-                        st.transfer_encoding = None
-                    else:
-                        st.transfer_encoding = "chunked" in te.lower()
+            if json_bodies:
+                # Use the first message's CL/TE for the primary fields (paper
+                # treats Encoding/CL per-message; for our simplified scalar
+                # tuple we pick the first message — pipeline mismatch is caught
+                # by Rule 1/Rule 8 anyway).
+                first = json_bodies[0]
+                st.backend_json = first
 
-                    # Field 6: body_length
-                    st.body_length = int(data.get("body_length", 0))
+                cl = first.get("cl_env") or first.get("content_length")
+                st.content_length = int(cl) if cl not in (None, "") else -1
+
+                te = first.get("transfer_encoding")
+                st.transfer_encoding = (
+                    None if te is None else ("chunked" in te.lower())
+                )
+
+                # Aggregate body_length + body_hash across all messages so
+                # smuggled requests that reach the backend show up here.
+                total_body = 0
+                hash_concat = ""
+                for d in json_bodies:
+                    total_body += int(d.get("body_length", 0))
+                    hash_concat += str(d.get("body_hash", ""))
+                st.body_length = total_body
+                st.body_hash = hash_concat
+
+                # A5: wsgi_eof — if ANY message reported leftover bytes,
+                # treat the whole exchange as non-clean.
+                eof_flags = [d.get("wsgi_eof") for d in json_bodies
+                             if "wsgi_eof" in d]
+                if eof_flags:
+                    st.wsgi_eof = all(bool(f) for f in eof_flags)
 
         except Exception:
             pass
 
         return st
+
+
+def _extract_json_bodies(text: str) -> list:
+    """
+    Extract every JSON object emitted by the backend app from a raw response
+    that may contain multiple pipelined responses concatenated together.
+
+    Returns a list of dicts (one per parsed message). Empty list if none found.
+    """
+    import re
+    results = []
+    # Split on each HTTP status line — each segment is one response.
+    parts = re.split(r"(?=HTTP/1\.[01] \d{3})", text)
+    for part in parts:
+        if "\r\n\r\n" not in part:
+            continue
+        body_text = part.split("\r\n\r\n", 1)[1]
+        body_text = _strip_chunked_envelope(body_text)
+        # Find the JSON object inside the body
+        start = body_text.find("{")
+        if start < 0:
+            continue
+        # Try progressively shorter substrings until JSON parses
+        for end in range(len(body_text), start, -1):
+            candidate = body_text[start:end].strip()
+            if not candidate.endswith("}"):
+                continue
+            try:
+                results.append(json.loads(candidate))
+                break
+            except json.JSONDecodeError:
+                continue
+    return results
 
 
 def _strip_chunked_envelope(text: str) -> str:
@@ -135,11 +208,11 @@ def _strip_chunked_envelope(text: str) -> str:
     return text
 
 
-# ── HDHunter Rule Constants ───────────────────────────────────────────────────
+# ── HDHunter-Inspired Rule Constants ──────────────────────────────────────────
 
 def _is_error(status: int) -> bool:
     """
-    HDHunter's is_error! macro: status 0 (timeout) or 4xx/5xx are errors.
+    Adaptation of HDHunter's is_error! macro: status 0 (timeout) or 4xx/5xx are errors.
     When BOTH endpoints return error, body_length/chunked/cl/consumed are skipped.
     """
     return status == 0 or (400 <= status < 600)
@@ -156,7 +229,7 @@ class DiffResult:
 
 def compare(proxy: StateTuple, direct: StateTuple) -> DiffResult:
     """
-    Apply all 7 differential rules mirroring HttpParamFeedback.is_interesting().
+    Apply the 7 adapted differential rules from HttpParamFeedback.is_interesting().
 
     Returns a DiffResult indicating whether a parsing discrepancy was detected.
     """
@@ -170,7 +243,7 @@ def compare(proxy: StateTuple, direct: StateTuple) -> DiffResult:
             "field": "message_count",
             "proxy": proxy.message_count,
             "direct": direct.message_count,
-            "note": "Pipeline desync — proxy saw different number of HTTP messages",
+            "note": "Pipeline desync candidate: endpoints saw different numbers of HTTP messages",
         })
 
     # ── Rule 2: Message Processed Mismatch ───────────────────────────────────
@@ -197,7 +270,46 @@ def compare(proxy: StateTuple, direct: StateTuple) -> DiffResult:
             "note": "Proxy and backend returned different HTTP status codes",
         })
 
+    # ── Rule 6: Body Length Mismatch ─────────────────────────────────────────
+    # Paper §4.4.2: Body is compared directly regardless of error state.
+    # HDHunter: rule!(p1.body_length[i] != p2.body_length[i])
+    if proxy.body_length != direct.body_length:
+        triggered.append({
+            "rule": 6,
+            "field": "body_length",
+            "proxy": proxy.body_length,
+            "direct": direct.body_length,
+            "note": "Backend consumed different body bytes via proxy vs direct",
+        })
+
+    # ── Rule 8: Order Mismatch (paper §4.4.1 — X-Desync-Id collection) ───────
+    # Triggers when the sequence of X-Desync-Id headers across responses
+    # differs between the two paths. Strong signal for Response Stealing /
+    # disordered pipelined responses.
+    if proxy.order != direct.order:
+        triggered.append({
+            "rule": 8,
+            "field": "order",
+            "proxy": proxy.order,
+            "direct": direct.order,
+            "note": "Response order (X-Desync-Id sequence) differs — Response Stealing candidate",
+        })
+
+    # ── Rule 9: Body Content Hash Mismatch (paper §4.4.1 — Body content) ─────
+    # Catches content discrepancies that body_length alone misses: same
+    # number of bytes consumed but different bytes (e.g. TE.CL with body
+    # offset shifted).
+    if proxy.body_hash and direct.body_hash and proxy.body_hash != direct.body_hash:
+        triggered.append({
+            "rule": 9,
+            "field": "body_hash",
+            "proxy": proxy.body_hash,
+            "direct": direct.body_hash,
+            "note": "Backend consumed same length but different content — TE.CL offset candidate",
+        })
+
     if not both_error:
+        # Paper §4.4.2: Encoding/CL/Consumed only meaningful if not both 4xx/5xx.
         # ── Rule 4: Chunked / Transfer-Encoding Mismatch ─────────────────────
         # HDHunter: rule!(p1.chunked_encoding[i] != p2.chunked_encoding[i])
         if proxy.transfer_encoding != direct.transfer_encoding:
@@ -206,7 +318,7 @@ def compare(proxy: StateTuple, direct: StateTuple) -> DiffResult:
                 "field": "transfer_encoding (chunked)",
                 "proxy": proxy.transfer_encoding,
                 "direct": direct.transfer_encoding,
-                "note": "Proxy stripped or added Transfer-Encoding before forwarding",
+                "note": "Transfer-Encoding handling differs between the two paths",
             })
 
         # ── Rule 5: Content-Length Mismatch ──────────────────────────────────
@@ -217,18 +329,7 @@ def compare(proxy: StateTuple, direct: StateTuple) -> DiffResult:
                 "field": "content_length",
                 "proxy": proxy.content_length,
                 "direct": direct.content_length,
-                "note": "Content-Length value was rewritten or misinterpreted by proxy",
-            })
-
-        # ── Rule 6: Body Length Mismatch ─────────────────────────────────────
-        # HDHunter: rule!(p1.body_length[i] != p2.body_length[i])
-        if proxy.body_length != direct.body_length:
-            triggered.append({
-                "rule": 6,
-                "field": "body_length",
-                "proxy": proxy.body_length,
-                "direct": direct.body_length,
-                "note": "Backend consumed different body bytes via proxy vs direct",
+                "note": "Content-Length handling differs between the two paths",
             })
 
         # ── Rule 7: Consumed Length Mismatch ─────────────────────────────────
@@ -239,7 +340,7 @@ def compare(proxy: StateTuple, direct: StateTuple) -> DiffResult:
                 "field": "consumed_length",
                 "proxy": proxy.consumed_length,
                 "direct": direct.consumed_length,
-                "note": "Raw response size differs — possible response smuggling",
+                "note": "Raw response size differs; response-side candidate requires replay",
             })
 
     return DiffResult(
@@ -266,7 +367,7 @@ def print_comparison(result: DiffResult, payload_label: str = ""):
     print(f"{BOLD}{'🔴 DISCREPANCY' if result.is_discrepancy else '🟢 SAME'}{label}{RESET}")
     print(f"{'─'*70}")
 
-    headers = ["Field", "Proxy (via Nginx)", "Backend (Direct)"]
+    headers = ["Field", "Proxy Path", "Backend Direct"]
     rows = [
         ("1. status",            result.proxy.status,            result.direct.status),
         ("2. message_count",     result.proxy.message_count,     result.direct.message_count),
@@ -275,6 +376,9 @@ def print_comparison(result: DiffResult, payload_label: str = ""):
         ("5. transfer_encoding", result.proxy.transfer_encoding, result.direct.transfer_encoding),
         ("6. body_length",       result.proxy.body_length,       result.direct.body_length),
         ("7. consumed_length",   result.proxy.consumed_length,   result.direct.consumed_length),
+        ("8. order",             result.proxy.order,             result.direct.order),
+        ("9. body_hash",         result.proxy.body_hash,         result.direct.body_hash),
+        ("   wsgi_eof",          result.proxy.wsgi_eof,          result.direct.wsgi_eof),
     ]
 
     col_w = [28, 22, 22]

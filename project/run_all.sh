@@ -5,6 +5,8 @@
 #   bash run_all.sh              # Start all envs + fuzz all targets
 #   bash run_all.sh --stop       # Stop all environments
 #   bash run_all.sh --fuzz-only  # Skip docker startup, fuzz existing targets
+# Optional env:
+#   MUTATIONS=3 RANDOM_SEED=1337 REPEAT_COUNT=3 bash run_all.sh --fuzz-only
 
 set -euo pipefail
 
@@ -17,14 +19,15 @@ COLLECTOR="$PROJECT_DIR/01_data_prep/collector.py"
 declare -A TARGETS=(
   ["nginx_gunicorn"]="8888:9001"
   ["haproxy_flask"]="8890:9003"
+  ["ats_gevent"]="8889:9002"
+  ["apache_tomcat"]="8891:9004"
 )
-# NOTE: ats_gevent requires a pre-built ATS Docker image and is optional.
-#       apache_tomcat requires a Tomcat webapp — also optional.
-#       Uncomment below when those images are ready:
-# ["ats_gevent"]="8889:9002"
-# ["apache_tomcat"]="8891:9004"
+TARGET_ORDER=("nginx_gunicorn" "haproxy_flask" "ats_gevent" "apache_tomcat")
 
-MUTATIONS=5
+# 12 seeds x (1 original + 3 mutated variants) = 48 test cases per target.
+MUTATIONS="${MUTATIONS:-3}"
+RANDOM_SEED="${RANDOM_SEED:-1337}"
+REPEAT_COUNT="${REPEAT_COUNT:-1}"
 
 # ─── Color helpers ─────────────────────────────────────────
 RED='\033[0;91m'; GREEN='\033[0;92m'; CYAN='\033[1;96m'; NC='\033[0m'
@@ -42,7 +45,7 @@ generate_seeds() {
 
 # ─── Start/Stop Docker environments ────────────────────────
 start_targets() {
-  for name in "${!TARGETS[@]}"; do
+  for name in "${TARGET_ORDER[@]}"; do
     compose="$TARGETS_DIR/$name/docker-compose.yml"
     if [ -f "$compose" ]; then
       info "Starting environment: $name"
@@ -55,7 +58,7 @@ start_targets() {
 }
 
 stop_targets() {
-  for name in "${!TARGETS[@]}"; do
+  for name in "${TARGET_ORDER[@]}"; do
     compose="$TARGETS_DIR/$name/docker-compose.yml"
     if [ -f "$compose" ]; then
       info "Stopping: $name"
@@ -71,14 +74,16 @@ fuzz_all() {
   echo "  FUZZING ALL TARGET PAIRS"
   echo "======================================================================"
   
-  for name in "${!TARGETS[@]}"; do
+  for name in "${TARGET_ORDER[@]}"; do
     IFS=':' read -r proxy_port backend_port <<< "${TARGETS[$name]}"
     echo ""
-    info "Fuzzing: $name  |  Proxy=127.0.0.1:$proxy_port  Backend=127.0.0.1:$backend_port"
+    info "Fuzzing: $name  |  Proxy=127.0.0.1:$proxy_port  Backend=127.0.0.1:$backend_port  Seed=$RANDOM_SEED  Repeat=$REPEAT_COUNT"
     python3 "$FUZZER" \
       --proxy-port "$proxy_port" \
       --backend-port "$backend_port" \
       --mutations "$MUTATIONS" \
+      --random-seed "$RANDOM_SEED" \
+      --repeat "$REPEAT_COUNT" \
       --quiet \
       --label "$name" || warn "Fuzzer error on $name — continuing."
     success "Done fuzzing $name."
