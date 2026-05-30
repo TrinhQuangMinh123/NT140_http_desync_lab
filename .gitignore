@@ -13,3 +13,6 @@ output/
 .DS_Store
 *.log
 *.swp
+Thumbs.db
+*Zone.Identifier
+*:Zone.Identifier
