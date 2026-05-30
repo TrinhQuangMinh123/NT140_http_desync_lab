@@ -7,6 +7,9 @@ services:
       - "8891:8891"
     depends_on:
       - backend
+    # Reach host-side fake_upstream (response-side harness, port 9501).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   backend:
     image: tomcat:10.1-jdk17

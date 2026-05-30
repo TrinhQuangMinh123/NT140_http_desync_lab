@@ -1,0 +1,4 @@
+GET / HTTP/1.1
+Host: Sec-CH-UA-Full-Version
+Connection: close
+

@@ -1,8 +1,35 @@
 """
 app.py - State Tuple Backend (shared across all target environments)
-Identical to nginx_gunicorn version — returns JSON state tuple.
+Returns enriched JSON state tuple (HDHunter-inspired: cl_env, body_hash,
+wsgi_eof, plus cov_new_edges for semi-gray-box coverage feedback).
 """
-import json, time
+import json, time, hashlib
+
+try:
+    import coverage  # type: ignore
+    _COV = coverage.Coverage(branch=True, data_file=None)
+    _COV.start()
+    _COV_AVAILABLE = True
+except Exception:
+    _COV = None
+    _COV_AVAILABLE = False
+
+_SEEN_LINES = set()
+_REQ_COUNTER = 0
+
+
+def _snapshot_coverage():
+    if not _COV_AVAILABLE:
+        return set()
+    _COV.stop()
+    data = _COV.get_data()
+    pairs = set()
+    for filename in data.measured_files():
+        for line in data.lines(filename) or []:
+            pairs.add((filename, line))
+    _COV.start()
+    return pairs
+
 
 def application(environ, start_response):
     state = {}
@@ -10,18 +37,45 @@ def application(environ, start_response):
     state["method"]            = environ.get("REQUEST_METHOD")
     state["path"]              = environ.get("PATH_INFO")
     state["content_length"]    = environ.get("CONTENT_LENGTH")
+    state["cl_env"]            = environ.get("CONTENT_LENGTH")
     state["transfer_encoding"] = environ.get("HTTP_TRANSFER_ENCODING")
+
     try:
-        raw_body = environ["wsgi.input"].read()
+        wsgi_in = environ["wsgi.input"]
+        raw_body = wsgi_in.read()
         state["body_content"] = raw_body.decode("latin-1", errors="replace")
         state["body_length"]  = len(raw_body)
+        state["body_hash"]    = hashlib.sha256(raw_body).hexdigest()[:16]
+        state["body_preview"] = raw_body[:64].hex()
+        try:
+            extra = wsgi_in.read(1)
+            state["wsgi_eof"] = (extra == b"")
+        except Exception:
+            state["wsgi_eof"] = True
     except Exception as e:
         state["body_content"] = ""
         state["body_length"]  = 0
+        state["body_hash"]    = ""
+        state["body_preview"] = ""
+        state["wsgi_eof"]     = True
         state["read_error"]   = str(e)
+
     state["x_real_ip"]   = environ.get("HTTP_X_REAL_IP")
     state["x_desync_id"] = environ.get("HTTP_X_DESYNC_ID")
     state["timestamp"]   = time.time()
+
+    global _REQ_COUNTER, _SEEN_LINES
+    _REQ_COUNTER += 1
+    if _COV_AVAILABLE:
+        after = _snapshot_coverage()
+        new_pairs = after - _SEEN_LINES
+        _SEEN_LINES = after
+        state["cov_new_edges"]   = len(new_pairs)
+        state["cov_total_edges"] = len(after)
+        state["cov_request_id"]  = _REQ_COUNTER
+    else:
+        state["cov_new_edges"]   = None
+        state["cov_total_edges"] = None
 
     response_headers = [("Content-Type", "application/json")]
     if state["x_desync_id"]:

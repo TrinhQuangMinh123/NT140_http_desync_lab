@@ -1,12 +1,12 @@
 # 🕷️ HTTP Desync Differential Fuzzer
 
-A differential testing framework for detecting **HTTP Request Smuggling (HTTP Desync)** vulnerabilities. Inspired by the academic research paper and toolchain of [HDHunter](https://github.com/hexian2001/HDHunter), rebuilt in Python and Docker for accessibility and extensibility.
+A differential testing framework for finding **HTTP Desync candidates** across reverse proxy/backend pairs. Inspired by the academic research paper and toolchain of [HDHunter](https://github.com/hexian2001/HDHunter), rebuilt in Python and Docker for accessibility and extensibility.
 
 ---
 
 ## How It Works
 
-The core idea is **differential testing**: send the same mutated HTTP request to both a **Reverse Proxy** and a **Backend Server** over independent raw TCP connections. If they parse it differently (different message count, status code, body length, etc.), a desync vulnerability exists.
+The core idea is **differential testing**: send the same mutated HTTP request to both a **Reverse Proxy** and a **Backend Server** over independent raw TCP connections. If they parse it differently (different message count, status code, body length, etc.), the tool records a **discrepancy**. A discrepancy is a candidate finding that needs replay/PoC validation before it is called an exploitable vulnerability.
 
 ```
                          ┌─────────────────────┐
@@ -56,10 +56,10 @@ project/
 │
 ├── 04_fuzzer_engine/
 │   ├── runner.py             # Main fuzzing loop (raw TCP, multi-target)
-│   └── diff_checker.py       # 7 differential rules (HDHunter's http_param.rs)
+│   └── diff_checker.py       # 7 differential rules adapted from HDHunter's http_param.rs
 │
 ├── 05_analyzer/
-│   ├── triage.py             # HDHunter Taxonomy classifier (4 categories)
+│   ├── triage.py             # Heuristic HDHunter-style taxonomy classifier
 │   └── crash_reports/        # Output: .json + .payload per discrepancy
 │
 ├── 06_exploits_poc/
@@ -82,7 +82,7 @@ project/
 | 3 | **Apache Traffic Server** | Gevent (Python) | 8889 | 9002 |
 | 4 | **Apache HTTPD 2.4** | Apache Tomcat 10 | 8891 | 9004 |
 
-All proxy configurations deliberately **disable header normalization** to expose raw parser behavior differences.
+The target configurations are tuned to expose raw parser behavior differences for lab testing.
 
 ---
 
@@ -151,9 +151,9 @@ Total = Seeds × (1 original + N mutations)
 
 ---
 
-## Differential Rules (7 Rules from HDHunter)
+## Differential Rules (HDHunter-Inspired)
 
-`diff_checker.py` implements the exact comparison logic from HDHunter's `http_param.rs`:
+`diff_checker.py` adapts the 7-field comparison idea from HDHunter's `http_param.rs`. Unlike the original paper implementation, this project does not instrument server internals through shared memory and does not use coverage-guided snapshot execution; it compares externally observed response/state fields collected through raw TCP and backend JSON responses.
 
 | Rule | Field | Triggers When |
 |------|-------|---------------|
@@ -169,13 +169,13 @@ Total = Seeds × (1 original + N mutations)
 
 ## Triage — HDHunter Taxonomy
 
-`triage.py` classifies all discrepancies into 4 academic categories:
+`triage.py` classifies all discrepancies into 4 academic categories. These labels are prioritization signals, not final exploit proof:
 
 | Category | Description |
 |----------|-------------|
 | **Taxonomy** | Desync shape: Inconsistent number / content / response-side |
 | **Discrepancies** | Root deviation: Non-standard parsing, TE.CL conflict, sanitization failure |
-| **Attacks** | Exploit potential: Request Smuggling, Request Confusing, Response Forgery |
+| **Attack Candidates** | Exploit potential: Request Smuggling, Request Confusing, Response Forgery |
 | **Insights** | Root cause: Language quirks, RFC non-compliance, Protocol mismatch |
 
 ---
@@ -185,29 +185,25 @@ Total = Seeds × (1 original + N mutations)
 **Requirements:** Python 3.10+, Docker with Compose plugin.
 
 ```bash
-# 1. Start Nginx + Gunicorn target
-cd project/02_targets/nginx_gunicorn
-docker compose up -d --build
-
-# 2. Generate Golden Seed Corpus
+# 1. Generate Golden Seed Corpus
 cd project/01_data_prep
 python3 collector.py
 
-# 3. Run the fuzzer
+# 2. Run one target manually
 cd project/04_fuzzer_engine
-python3 runner.py --mutations 10 --quiet
+python3 runner.py --proxy-port 8888 --backend-port 9001 --label nginx_gunicorn --mutations 3 --quiet
 
-# 4. Triage and classify findings
+# 3. Triage and classify findings
 cd project/05_analyzer
 python3 triage.py
 
-# OR: run everything with one command
+# OR: start and fuzz all four configured targets with one command
 bash project/run_all.sh
 ```
 
 **Multi-target fuzzing:**
 ```bash
-python3 runner.py --proxy-port 8890 --backend-port 9003 --label haproxy_flask --mutations 10 --quiet
+python3 runner.py --proxy-port 8890 --backend-port 9003 --label haproxy_flask --mutations 3 --quiet
 ```
 
 **Mini standalone demo (for presentations):**
@@ -221,8 +217,8 @@ python3 project/07_mini_test_suite/test_proxy_backend.py
 
 | File | Why It Matters |
 |------|----------------|
-| `04_fuzzer_engine/diff_checker.py` | The 7 differential rules — the academic core of the project |
-| `02_targets/nginx_gunicorn/backend/app.py` | State Tuple JSON backend replacing HDHunter's QEMU shared memory |
-| `05_analyzer/triage.py` | HDHunter Taxonomy classifier — highest academic value |
+| `04_fuzzer_engine/diff_checker.py` | The 7 adapted differential rules — the academic core of the project |
+| `02_targets/nginx_gunicorn/backend/app.py` | State Tuple JSON backend used as a lightweight substitute for HDHunter-style instrumentation |
+| `05_analyzer/triage.py` | Heuristic HDHunter-style taxonomy classifier |
 | `03_mutator/advanced_level.py` | Extended mutators beyond the original paper |
 | `07_mini_test_suite/test_proxy_backend.py` | Self-contained demo for live presentations |

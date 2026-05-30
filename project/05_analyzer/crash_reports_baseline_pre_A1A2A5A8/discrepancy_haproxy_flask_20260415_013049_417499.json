@@ -1,0 +1,55 @@
+{
+  "target": "haproxy_flask_",
+  "timestamp": "20260415_013049_417499",
+  "seed_index": 3,
+  "mutation_index": 0,
+  "mutation_label": "original",
+  "triggered_rules": [
+    {
+      "rule": 3,
+      "field": "status",
+      "proxy": 200,
+      "direct": 400,
+      "note": "Proxy and backend returned different HTTP status codes"
+    },
+    {
+      "rule": 4,
+      "field": "transfer_encoding (chunked)",
+      "proxy": true,
+      "direct": null,
+      "note": "Proxy stripped or added Transfer-Encoding before forwarding"
+    },
+    {
+      "rule": 6,
+      "field": "body_length",
+      "proxy": 4,
+      "direct": 0,
+      "note": "Backend consumed different body bytes via proxy vs direct"
+    },
+    {
+      "rule": 7,
+      "field": "consumed_length",
+      "proxy": 408,
+      "direct": 282,
+      "note": "Raw response size differs \u2014 possible response smuggling"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": true,
+    "body_length": 4,
+    "consumed_length": 408
+  },
+  "direct_state": {
+    "status": 400,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 282
+  }
+}

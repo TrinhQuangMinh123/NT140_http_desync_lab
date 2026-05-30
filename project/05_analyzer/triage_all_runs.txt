@@ -1,0 +1,46 @@
+======================================================================
+  HDHUNTER-INSPIRED TAXONOMY & HTTP DESYNC ANALYSIS
+  Reports Dir: /home/lehuuhoang/project/05_analyzer
+  Total discrepancies analyzed: 1359
+======================================================================
+
+[1;96m1. Taxonomy (Desync Shapes)[0m
+============================================================
+  [0m► Response-side: length/order discrepancy: 718 reports (52.8%)[0m
+  [0m► Possible Request-side Desync: paths emitted different numbers of HTTP responses: 349 reports (25.7%)[0m
+  [0m► Possible Request-side Desync: response content/length differs: 292 reports (21.5%)[0m
+
+[1;96m2. Primary Discrepancies (Technical Deviations)[0m
+============================================================
+  [0m► Incomplete response sanitization (Raw byte difference): 519 reports (38.2%)[0m
+  [0m► Incomplete response sanitization (Validation Bypass): 469 reports (34.5%)[0m
+  [0m► Non-standard number parsing: 290 reports (21.3%)[0m
+  [0m► Differing TE.CL handling strategies: 51 reports (3.8%)[0m
+  [0m► Other: 21 reports (1.5%)[0m
+  [0m► Inconsistent trailer section handling: 9 reports (0.7%)[0m
+
+[1;96m3. Attack Candidates (Exploitability Signals)[0m
+============================================================
+  [0m► Request Confusing candidate (requires semantic validation): 561 reports (41.3%)[0m
+  [0m► Response Stealing/Forgery candidate (requires response-queue PoC): 449 reports (33.0%)[0m
+  [91m► Request Smuggling candidate (requires replay/PoC): 349 reports (25.7%)[0m
+
+[1;96m4. Insights (Hypothesized Root Causes)[0m
+============================================================
+  [0m► Protocol translation issues (Proxy vs WSGI/CGI Mismatch): 739 reports (54.4%)[0m
+  [0m► Programming language quirks (Number Parsing routines): 520 reports (38.3%)[0m
+  [0m► Non-standard HTTP RFC compliance: 83 reports (6.1%)[0m
+  [0m► Rarely-used feature handling (Trailer Sections): 17 reports (1.3%)[0m
+
+[1;96m5. Repeat Stability[0m
+============================================================
+  Reports with repeat metadata: 1171
+  Stable discrepancies: 785
+  Unstable discrepancies: 386
+  Reproduction rate across completed repeated runs: 100.0%
+
+[1;93m[*] Notable Pipeline-Desync Candidate (Smuggling shortlist):[0m
+  - File: discrepancy_nginx_gunicorn_20260527_021951_739326.json
+  - Mutator used: sequence:splice
+  - Detail: Proxy path observed None HTTP response(s), backend-direct path observed 1. This is a wire-level observation, NOT proof of a hidden request — replay + traffic capture required before calling this exploitable.
+

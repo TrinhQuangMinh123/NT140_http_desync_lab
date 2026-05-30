@@ -1,0 +1,81 @@
+{
+  "target": "apache_tomcat",
+  "timestamp": "20260527_021117_170096",
+  "seed_index": 9,
+  "mutation_index": 1,
+  "mutation_label": "sequence:splice",
+  "payload_sha256": "9008d7d0f93f5a529a2258512bbea97c2fd3294fd3617cf7de6a0e0dba17c222",
+  "confidence": "high",
+  "diff_notes": [],
+  "triggered_rules": [
+    {
+      "rule": 4,
+      "field": "transfer_encoding (chunked)",
+      "proxy": false,
+      "direct": true,
+      "note": "Transfer-Encoding handling differs between the two paths"
+    },
+    {
+      "rule": 5,
+      "field": "wsgi_content_length",
+      "proxy": 5,
+      "direct": -1,
+      "note": "Content-Length handling differs between the two paths"
+    },
+    {
+      "rule": 7,
+      "field": "raw_response_length",
+      "proxy": 1045,
+      "direct": 997,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "observed_response_count": 2,
+    "observed_messages_parsed": 2,
+    "wsgi_content_length": 5,
+    "wsgi_transfer_encoding": false,
+    "wsgi_body_length": 10,
+    "raw_response_length": 1045,
+    "response_order": [
+      "78d3eb58f138495eb73050b88aa973a5",
+      "1ef325672a124b5cbee2f6c744b5ef47"
+    ],
+    "body_hash": "",
+    "wsgi_eof": null,
+    "cov_new_edges": null,
+    "partial_timeout": false
+  },
+  "direct_state": {
+    "status": 200,
+    "observed_response_count": 2,
+    "observed_messages_parsed": 2,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": true,
+    "wsgi_body_length": 10,
+    "raw_response_length": 997,
+    "response_order": [
+      "78d3eb58f138495eb73050b88aa973a5",
+      "1ef325672a124b5cbee2f6c744b5ef47"
+    ],
+    "body_hash": "",
+    "wsgi_eof": null,
+    "cov_new_edges": null,
+    "partial_timeout": false
+  },
+  "repeat_analysis": {
+    "repeat_attempts": 1,
+    "completed_repeats": 1,
+    "skipped_repeats": 0,
+    "discrepancy_runs": 1,
+    "stable_discrepancy": true,
+    "unique_rule_sets": [
+      [
+        4,
+        5,
+        7
+      ]
+    ]
+  }
+}

@@ -13,6 +13,10 @@ services:
       - backend
     networks:
       - desync_net
+    # Enable host.docker.internal so /resp-test/ can reach the fake_upstream
+    # running on the host at port 9501 (response-side harness).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # Single-process mode (mirrors HDHunter's -X single-thread flag for Apache)
     command: ["nginx", "-g", "daemon off;"]
 

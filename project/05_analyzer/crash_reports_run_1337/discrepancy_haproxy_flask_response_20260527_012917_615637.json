@@ -1,0 +1,65 @@
+{
+  "target": "haproxy_flask_response",
+  "timestamp": "20260527_012917_615637",
+  "seed_index": 4,
+  "mutation_index": 0,
+  "mutation_label": "original",
+  "payload_sha256": "2413b2e019d8ae67a767d85b5cc965ee51bc720f5f30f438ce77df18ea201096",
+  "confidence": "high",
+  "diff_notes": [],
+  "triggered_rules": [
+    {
+      "rule": 1,
+      "field": "observed_response_count",
+      "proxy": 1,
+      "direct": 2,
+      "note": "Pipeline desync candidate: paths emitted a different number of HTTP responses on the wire"
+    },
+    {
+      "rule": 2,
+      "field": "observed_messages_parsed",
+      "proxy": 1,
+      "direct": 2,
+      "note": "One path produced more fully-parseable responses than the other"
+    },
+    {
+      "rule": 7,
+      "field": "raw_response_length",
+      "proxy": 88,
+      "direct": 133,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": null,
+    "wsgi_body_length": 0,
+    "raw_response_length": 88,
+    "response_order": [],
+    "body_hash": "",
+    "wsgi_eof": null,
+    "cov_new_edges": null,
+    "partial_timeout": false
+  },
+  "direct_state": {
+    "status": 200,
+    "observed_response_count": 2,
+    "observed_messages_parsed": 2,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": null,
+    "wsgi_body_length": 0,
+    "raw_response_length": 133,
+    "response_order": [],
+    "body_hash": "",
+    "wsgi_eof": null,
+    "cov_new_edges": null,
+    "partial_timeout": false
+  },
+  "repeat_analysis": {
+    "mode": "response",
+    "upstream_received_bytes": 60
+  }
+}

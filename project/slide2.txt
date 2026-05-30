@@ -1,0 +1,209 @@
+4.2.2 MUTATION STRATEGIES (1 slide — 1 phút)
+
+Slide 10 — Mutation: 3 tầng (Sequence / Message / Byte)
+
+Tạo slide 3 tầng mutation của HDHUNTER.
+Tiêu đề: "3-Level Mutation Strategy"
+Layout 3 cột song song, mỗi cột 1 icon trên đỉnh:
+
+CỘT 1 — SEQUENCE LEVEL (icon: stacked layers)
+- Splice: chèn 1 message vào sequence
+- Remove: xóa 1 message
+- Mục tiêu: pipelining/persistent connection discrepancy
+
+CỘT 2 — MESSAGE LEVEL (icon: document with edits)
+- Duplicate / Delete / Insert header
+- Replace token by special symbol
+- Swap value cùng datatype
+- Modify trailer
+- Mục tiêu: TE/CL conflict, header parsing edge cases
+
+CỘT 3 — BYTE LEVEL (icon: binary)
+- Insert / Remove / Duplicate / Splice byte
+- Mục tiêu: Robustness Principle violations — non-standard number, CR/LF anomaly
+
+Dưới cùng: "Một test case có thể trải qua NHIỀU mutator trong 1 vòng → input space rất rộng."
+
+4.2.3 COVERAGE-DIRECTED FEEDBACK (1 slide — 45s)
+
+Slide 11 — Coverage Feedback: Hợp nhất 2 edge map
+
+Tạo slide coverage feedback của HDHUNTER.
+Tiêu đề: "Coverage-directed Feedback — Combining 2 Edge Maps"
+Sơ đồ:
+[Impl A edge map] + [Impl B edge map] → CONCATENATE → [Double-sized combined map]
+Bullet:
+- Mỗi implementation có edge hit count map riêng (AFL-style).
+- HDHUNTER nối 2 map lại → 1 map gấp đôi → đánh giá xem input có "mở rộng exploration trên CẢ HAI" không.
+- Quan trọng: Input vừa kích hoạt edge mới VỪA gây discrepancy → KHÔNG thêm vào corpus.
+  → Lý do: mutate từ input đó dễ lặp lại discrepancy cũ, giảm hiệu quả fuzzing.
+Highlight box dưới cùng: "Combined coverage = key insight để dùng AFL cho differential testing."
+
+4.3 SNAPSHOT-BASED EXECUTOR (2 slides — 1.5 phút)
+
+Slide 12 — Snapshot Executor: Vì sao cần?
+
+Tạo slide motivation cho snapshot executor.
+Tiêu đề: "Snapshot-based Executor — Reset 'sạch' sau mỗi test"
+Vấn đề (góc trái, nền đỏ nhạt):
+- HTTP Desync làm hỏng TCP state và HTTP message queue.
+- Test case sau bị nhiễu bởi state thừa từ test trước → false positive/negative.
+- Restart server (đặc biệt Tomcat, Apache) tốn vài giây/lần → fuzzing chậm thê thảm.
+Giải pháp (góc phải, nền xanh nhạt):
+- Dùng QEMU snapshot (kế thừa từ Nyx/Nyx-Net).
+- Lưu snapshot sau khi server "ready" (probe bằng benign request).
+- Sau mỗi test → restore về snapshot → state sạch tuyệt đối.
+- Coverage thu qua shared memory + guest memory access.
+- AFL-like coverage (không phải hardware tracing như Nyx) → giảm noise cho userspace.
+
+Slide 13 — Snapshot Executor: 2 chế độ Harness
+
+Tạo slide kiến trúc harness của snapshot executor.
+Tiêu đề: "Test Harness — 2 chế độ thực thi"
+Layout 2 cột song song:
+
+CHẾ ĐỘ 1 — HTTP REQUEST:
+Executor → Harness gửi test case (Request_in) → Implementation parse → trả Response.
+Thu coverage + state tuple từ trong impl.
+
+CHẾ ĐỘ 2 — HTTP/CGI RESPONSE:
+Impl được cấu hình forward requests đến Harness (làm fake upstream).
+1) Harness gửi benign Request → Impl forward (Request_fwd) đến Harness.
+2) Harness trả Response_in (test case dưới dạng response) → Impl parse response → trả về downstream.
+3) Thu coverage + state.
+
+Box dưới: "Đây là điểm KHÁC BIỆT — paper là tool đầu tiên fuzz được response-side một cách systematic."
+
+4.4 HTTP DESYNC DETECTOR (2 slides — 1.5 phút)
+
+Slide 14 — Detector: 7-field State Tuple
+
+Tạo slide State Tuple — oracle để phát hiện Desync.
+Tiêu đề: "State Tuple — Oracle dựa trên parser STATE (không phải string output)"
+Tâm slide: hình hexagon hoặc box lớn ghi:
+  StateTuple = (Count, Consumed, Body, Encoding, CL, Order, Status)
+Xung quanh là 7 mô tả ngắn (mỗi cái 1 dòng):
+- Count: số request/response mà parser nhận diện
+- Consumed: số byte đã consume trong quá trình parse
+- Body: nội dung (hoặc độ dài) body đã parse
+- Encoding: raw hay chunked được dùng
+- CL: giá trị Content-Length parser hiểu
+- Order: thứ tự message — dùng UUID header `X-Desync-Id`
+- Status: HTTP status code
+
+Note dưới: "5 trường đầu thu bằng CODE INSERTION vào impl (Apache, NGINX,...). Order/Status thu bên ngoài."
+
+Slide 15 — Detector: Detection Rule + Exception
+
+Tạo slide detection rule của detector.
+Tiêu đề: "Detection Rule"
+Box chính: "Discrepancy ⟺ bất kỳ field nào trong State Tuple không khớp giữa 2 implementations."
+
+Layout 2 cột:
+SO SÁNH TRỰC TIẾP:
+- Count → khác là Desync
+- Body → khác là Desync
+- Order → khác là Desync
+
+SO SÁNH CÓ ĐIỀU KIỆN (cần check Status trước):
+- Encoding, CL, Consumed → CHỈ so sánh khi cả 2 impl không cùng trả 4xx/5xx.
+  Lý do: nếu cả 2 đều reject (error state), so sánh CL/Encoding/Consumed vô nghĩa.
+
+Highlight: "Exception này giảm false positive đáng kể so với so sánh thô."
+
+5.2 FINDINGS (2 slides — 1.5 phút)
+
+Slide 16 — 5 nhóm Discrepancy chính tìm được
+
+Tạo slide tổng kết findings của paper.
+Tiêu đề: "5 Primary Types of Discrepancies Found"
+Layout grid 2x3 (ô thứ 6 dùng cho summary):
+
+1. NON-STANDARD NUMBER PARSING (icon: digits)
+   - 8/19 impl chấp nhận 0x prefix, + prefix, _ giữa số, suffix...
+   - VD: Squid xử lý chunk 0x-prefix bình thường, H2O coi là "last chunk".
+
+2. INCONSISTENT TRAILER SECTION (icon: tail)
+   - Apache/HAProxy validate strict, NGINX cho qua malformed.
+   - gevent/Eventlet/Puma không hỗ trợ → drop sai → "tách" thành 2 request.
+
+3. NON-STANDARD LINE SEPARATOR (icon: enter-key)
+   - Một số impl chấp nhận LF-only thay vì CRLF chuẩn.
+   - Verified payload trên NGINX ↔ Gunicorn.
+
+4. REQUEST TE.CL HANDLING (icon: switch)
+   - Mỗi impl chọn TE hay CL khác nhau; persistent connection xử lý khác nhau.
+   - Eventlet + Gunicorn pass CL qua CONTENT_LENGTH env → app có thể bị confuse.
+
+5. RESPONSE TE.CL & CGI SANITIZATION (icon: shield-broken — NOVEL)
+   - H2O, Twisted chấp nhận CL trong response (khác hành vi xử lý request).
+   - Apache mod_proxy forward NGUYÊN trailer/TE/CL trong CGI response (FastCGI/SCGI/uWSGI/AJP).
+
+Footer: "(4) & (5) bao gồm 2 nhóm hoàn toàn mới (Trailer + Response TE.CL)."
+
+Slide 17 — Kết quả định lượng
+
+Tạo slide kết quả định lượng của paper.
+Tiêu đề: "Evaluation Results — 19 Implementations"
+Bảng:
+| Hạng mục | Số lượng |
+|---|---|
+| HTTP implementations tested | 19 |
+| Testing pairs — Request | 171 |
+| Testing pairs — Response | 36 |
+| Testing pairs — CGI Response | 10 |
+| NEW vulnerabilities found | 17 |
+| CVE assigned | 9 |
+| Bounty (Tomcat, Internet Bug Bounty) | $4,660 |
+
+Bên cạnh có biểu đồ cột (hoặc danh sách có icon ✓):
+- Apache → CVE Critical
+- Tomcat → CVE High + bounty
+- Squid → CVE Critical
+- Twisted → CVE High
+- gevent → Confirmed, Critical
+- (...)
+Footer: "Tested 12h × 5 lần per pair. Mỗi run dùng 20 seed thực thu từ tcpdump."
+
+5.3 ATTACKS (2 slides — 1.5 phút)
+
+Slide 18 — 4 Attack Techniques
+
+Tạo slide tổng quan 4 dạng tấn công.
+Tiêu đề: "Four Attack Techniques from Discrepancies"
+Grid 2x2, mỗi ô có icon riêng và sơ đồ nhỏ:
+
+(a) REQUEST SMUGGLING — bypass auth
+ Sơ đồ: Attacker → Proxy (/path1 OK) → Backend nhận thêm /path2 ẩn.
+ VD: ATS + gevent với trailer section.
+
+(b) REQUEST CONFUSING — bypass logic
+ VD: Gunicorn + Flask. Chunked với 'C' viết hoa →
+   request.content_length = 0
+   request.form = {'id': "1' or sleep(1);..."}
+ → bypass mọi check dựa trên content_length.
+
+(c) RESPONSE STEALING — đánh cắp response của victim
+ VD: Twisted xử lý pipelined requests song song → response disorder
+ → attacker giữ kết nối lâu → "tráo" response của victim.
+
+(d) RESPONSE FORGERY — chèn response giả vào queue
+ VD: Apache mod_proxy forward CGI response với TE+CL không sanitize
+ → smuggle response giả xuống downstream client.
+
+Box dưới cùng (đỏ-cam): "Cả 4 đều bắt nguồn từ DISCREPANCY chứ không phải lỗi code đơn lẻ."
+
+Slide 19 — Conclusion
+
+Tạo slide kết luận.
+Tiêu đề: "Conclusion"
+3 takeaway lớn (mỗi takeaway 1 dòng, font to):
+
+1. HTTP Desync là vấn đề COMPOSITION — không nằm ở 1 server đơn lẻ mà ở SỰ KẾT HỢP.
+
+2. HDHUNTER là tool đầu tiên dùng GRAY-BOX COVERAGE-DIRECTED DIFFERENTIAL testing cho Desync, và mở rộng sang RESPONSE + CGI.
+
+3. 17 vulnerabilities mới, 9 CVE — chứng minh black-box và dictionary-based scanner đã bỏ sót rất nhiều.
+
+Dưới cùng: "Q&A — Câu hỏi?"
+Có thể thêm logo USENIX nhỏ và link paper.

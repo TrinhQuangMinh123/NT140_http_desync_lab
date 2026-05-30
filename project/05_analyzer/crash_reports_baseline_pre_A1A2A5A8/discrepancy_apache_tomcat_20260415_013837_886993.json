@@ -1,0 +1,34 @@
+{
+  "target": "apache_tomcat_",
+  "timestamp": "20260415_013837_886993",
+  "seed_index": 10,
+  "mutation_index": 2,
+  "mutation_label": "message:node_typed_swap",
+  "triggered_rules": [
+    {
+      "rule": 7,
+      "field": "consumed_length",
+      "proxy": 1375,
+      "direct": 1315,
+      "note": "Raw response size differs \u2014 possible response smuggling"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "message_count": 2,
+    "message_processed": 2,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 1375
+  },
+  "direct_state": {
+    "status": 200,
+    "message_count": 2,
+    "message_processed": 2,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 1315
+  }
+}

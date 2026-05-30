@@ -1,0 +1,59 @@
+{
+  "target": "nginx_resp_test_response",
+  "timestamp": "20260522_092241_372488",
+  "seed_index": 4,
+  "mutation_index": 1,
+  "mutation_label": "byte:obfuscate_unicode_encoding",
+  "payload_sha256": "6b7c359f82930cad6b51d6e47086c6e0b693e3c5f64bd8d9f942de054d3d6fcc",
+  "triggered_rules": [
+    {
+      "rule": 1,
+      "field": "message_count",
+      "proxy": 1,
+      "direct": 2,
+      "note": "Pipeline desync candidate: endpoints saw different numbers of HTTP messages"
+    },
+    {
+      "rule": 2,
+      "field": "message_processed",
+      "proxy": 1,
+      "direct": 2,
+      "note": "One endpoint processed more complete messages than the other"
+    },
+    {
+      "rule": 7,
+      "field": "consumed_length",
+      "proxy": 155,
+      "direct": 134,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 155,
+    "order": [],
+    "body_hash": "",
+    "wsgi_eof": null
+  },
+  "direct_state": {
+    "status": 200,
+    "message_count": 2,
+    "message_processed": 2,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 134,
+    "order": [],
+    "body_hash": "",
+    "wsgi_eof": null
+  },
+  "repeat_analysis": {
+    "mode": "response",
+    "upstream_received_bytes": 0
+  }
+}

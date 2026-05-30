@@ -1,0 +1,16 @@
+# Override that points NGINX's main upstream at the wire_tap relay running
+# on the host instead of directly at the backend container.
+# Use:
+#   docker compose -f docker-compose.yml -f docker-compose.wiretap.yml up -d
+#
+# Requires wire_tap.py to be running on the host:
+#   python3 04_fuzzer_engine/wire_tap.py \
+#       --listen 0.0.0.0:9100 --upstream 127.0.0.1:9001 \
+#       --log /tmp/wire_tap_nginx.log
+
+services:
+  proxy:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./nginx.wiretap.conf:/etc/nginx/nginx.conf:ro
