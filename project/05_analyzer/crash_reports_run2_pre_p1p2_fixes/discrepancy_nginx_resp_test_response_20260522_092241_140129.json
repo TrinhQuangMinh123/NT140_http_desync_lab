@@ -1,0 +1,52 @@
+{
+  "target": "nginx_resp_test_response",
+  "timestamp": "20260522_092241_140129",
+  "seed_index": 3,
+  "mutation_index": 1,
+  "mutation_label": "byte:perturb_content_length",
+  "payload_sha256": "da33e7c7fddfa0d51d983cc0a4556f1de15edc79639bfaaf606384906b841908",
+  "triggered_rules": [
+    {
+      "rule": 3,
+      "field": "status",
+      "proxy": 502,
+      "direct": 200,
+      "note": "Proxy and backend returned different HTTP status codes"
+    },
+    {
+      "rule": 7,
+      "field": "consumed_length",
+      "proxy": 309,
+      "direct": 134,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 502,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 309,
+    "order": [],
+    "body_hash": "",
+    "wsgi_eof": null
+  },
+  "direct_state": {
+    "status": 200,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": -1,
+    "transfer_encoding": null,
+    "body_length": 0,
+    "consumed_length": 134,
+    "order": [],
+    "body_hash": "",
+    "wsgi_eof": null
+  },
+  "repeat_analysis": {
+    "mode": "response",
+    "upstream_received_bytes": 0
+  }
+}

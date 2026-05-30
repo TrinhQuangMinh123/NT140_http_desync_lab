@@ -1,224 +1,236 @@
-# BÁO CÁO THỰC NGHIỆM — HDHUNTER-Inspired Differential Testbed
+# BAO CAO THUC NGHIEM - HDHUNTER-Inspired Differential Testbed
 
-**Công cụ:** HTTP Desync Differential Fuzzer (HDHUNTER-inspired)
-**Ngày chạy:** 2026-05-22
-**Số seeds:** 12 Golden Seeds (raw HTTP/1.1 từ `01_data_prep/seeds_db/`)
-**Mutations/seed:** 3 + 1 original = 48 test cases/env
-**Tổng test cases:** 192 (4 env × 48)
-**Random seed:** 1337 (reproducible)
-**Detection rules:** 9 (7 HDHUNTER-inspired + 2 mở rộng: R8 Order, R9 body_hash)
-**Reproduction:** `MUTATIONS=3 RANDOM_SEED=1337 REPEAT_COUNT=1 bash run_all.sh --fuzz-only`
+## 0. Pham vi so lieu
 
----
+- Nguon so lieu: `05_analyzer/crash_reports_run_1337` den `05_analyzer/crash_reports_run_1341`.
+- Khong tinh `05_analyzer/crash_reports/` hien hanh vi thu muc nay co the chua report con sot tu luot chay bi ngat hoac chay thu.
+- Tong report discrepancy hop le trong archive: **935**.
 
-## 1. Tổng quan kết quả (Executive Summary)
+## 1. Cau hinh chay
 
-| Môi trường (Proxy → Backend) | Test cases | Discrepancies | Hit Rate |
-|---|---:|---:|---:|
-| NGINX 1.25 → Gunicorn (Python WSGI)   | 48 | **44** | **91.7%** |
-| HAProxy 2.9 → Gunicorn (Python WSGI)  | 48 | **36** | **75.0%** |
-| ATS → gevent (Python)                 | 48 | **48** | **100.0%** |
-| Apache HTTPD 2.4 → Tomcat 10 (Java)   | 48 | **37** | **77.1%** |
-| **Tổng**                              | **192** | **165** | **85.9%** |
-
-**Lưu ý quan trọng**:
-- "Hit Rate" là **discrepancy rate**, KHÔNG phải vulnerability rate. Discrepancy chỉ là tín hiệu cần phân tích, không tự động khẳng định khai thác được.
-- So với baseline trước (Apr 2026, 7 rule, 154 discrepancy), version mới sau cập nhật A1+A2+A5+A8 ghi nhận **165 discrepancy (+7%)** nhờ bổ sung R8 (Order) và R9 (body_hash) — phát hiện thêm các trường hợp length-only oracle bỏ sót.
-
----
-
-## 2. Tần suất kích hoạt mỗi Rule
-
-| Rule | Field | NGINX | HAProxy | ATS | Apache | Ý nghĩa |
-|---|---|---:|---:|---:|---:|---|
-| R1 | `message_count`       | 18 | 14 | 7  | 2  | Pipeline desync candidate |
-| R2 | `message_processed`   | 18 | 14 | 7  | 2  | Một bên parse hoàn chỉnh hơn |
-| R3 | `status`              | 21 | 6  | 11 | 3  | Status code khác |
-| R4 | `transfer_encoding`   | 17 | 5  | 2  | 12 | Cách xử lý TE khác |
-| R5 | `content_length`      | 7  | 0  | 4  | 12 | Cách xử lý CL khác |
-| R6 | `body_length`         | 14 | 5  | 8  | 0  | Backend đọc lượng byte khác |
-| R7 | `consumed_length`     | 43 | 34 | 47 | 34 | Raw response length khác |
-| **R8** | `order` (MỚI)     | 25 | 12 | 11 | 0  | **Response order desync — Stealing candidate** |
-| **R9** | `body_hash` (MỚI) | 5  | 7  | 3  | 0  | **Body content khác (cùng length) — TE.CL offset** |
-
-### Quan sát:
-
-- **R7 (consumed_length)** là rule fire nhiều nhất ở mọi env — chứng tỏ proxy thường thêm/bớt header so với backend direct, tạo response length khác. Bản chất là "noise" nhưng vẫn là tín hiệu response-side đáng theo dõi.
-- **R8 (Order)** fire 48 lần tổng cộng → cải tiến A1 (X-Desync-Id UUID injection) **bắt được các trường hợp pipeline desync mà length-only oracle bỏ sót**.
-- **R9 (body_hash)** fire 15 lần tổng cộng → cải tiến A2 phát hiện content khác nhau dù body_length giống nhau (smoking gun cho TE.CL offset shift).
-- **Apache HTTPD → Tomcat không có R8/R9 hit** vì Tomcat là Java servlet, không trả JSON với 2 field mới — code insertion A1/A2 chỉ áp dụng cho 3 cặp WSGI Python.
-- **R5 (Content-Length) cao nhất ở Apache (12)** — Apache HTTPD reject hoặc normalize CL khác Tomcat — kết quả khớp paper §5.2.4 (Different request TE.CL handling).
-
----
-
-## 3. Attack Candidate Matrix
-
-Phân loại heuristic dựa trên rule kích hoạt:
-
-| Proxy | Request Smuggling | Response Stealing/Forgery | Request Confusing | Total |
-|---|---:|---:|---:|---:|
-| NGINX        | 18 (40.9%) | 17 (38.6%) | 9 (20.5%)  | 44 |
-| HAProxy      | 14 (38.9%) | 17 (47.2%) | 5 (13.9%)  | 36 |
-| ATS          | 7 (14.6%)  | 37 (77.1%) | 4 (8.3%)   | 48 |
-| Apache HTTPD | 2 (5.4%)   | 23 (62.2%) | 12 (32.4%) | 37 |
-
-**Quy tắc phân loại** (xem [05_analyzer/triage.py](05_analyzer/triage.py)):
-- **Smuggling candidate**: R1 hoặc R2 fire (số message khác → pipeline desync).
-- **Confusing candidate**: R4/R5/R6 fire mà không có R1/R2 (content discrepancy).
-- **Response candidate**: chỉ R3/R7/R8/R9 fire (length/order khác, không thêm/bớt message).
-
-**Insight**:
-- **ATS có discrepancy rate cao nhất (100%) và Response candidate cao nhất (77%)** — khớp với paper: ATS không sanitize trailer, forward nguyên byte → tạo nhiều response-side mismatch.
-- **NGINX và HAProxy có Smuggling candidate cao** (40%+) — pipeline desync rõ hơn 2 env còn lại.
-- **Apache HTTPD ít Smuggling nhất (5%) nhưng Confusing cao** — Apache nghiêm khắc về message boundary nhưng vẫn để TE/CL xung đột lọt qua xuống Tomcat.
-
----
-
-## 4. Quan sát chi tiết về các cải tiến A1/A2/A5/A8
-
-### 4.1 R8 — X-Desync-Id Order Tracking (A1)
-
-48 case ghi nhận order khác nhau. 3 mẫu điển hình:
-
-**Mẫu 1** — HAProxy: proxy thấy 2 UUID, backend direct chỉ thấy 1:
-```
-proxy order:  ['ae97d7de...', '58c35241...']
-direct order: ['ae97d7de...']
-```
-→ HAProxy split payload thành 2 request, Gunicorn chỉ parse 1 → R1+R2+R8 cùng fire. Strong pipeline desync candidate.
-
-**Mẫu 2** — ATS: proxy không nhận được response nào (timeout/reject), backend direct nhận 1 UUID:
-```
-proxy order:  []
-direct order: ['90b3d600...']
-```
-→ ATS reject payload nhưng backend chấp nhận. Đây là **policy mismatch** — không phải vulnerability ngay nhưng cho thấy ATS strict hơn.
-
-### 4.2 R9 — Body Hash Content Discrepancy (A2)
-
-15 case body_hash khác nhau. Ví dụ ATS+gevent:
-```
-proxy   body_length=5  body_hash=f0393febe8baaa55
-direct  body_length=0  body_hash=e3b0c44298fc1c14  (= sha256 của empty)
-Mutator: message:field_line_duplicate
-```
-→ Backend direct đọc body rỗng, qua proxy thì đọc 5 byte. Trường hợp này length CÓ khác nên R6 cũng fire — đây là double-confirm.
-
-Trường hợp **R9 fire mà R6 không fire** (length giống, content khác) là smoking gun thực sự cho TE.CL offset shift. Cần lọc thêm:
-
-### 4.3 wsgi_eof — A5 EOF Anomaly
-
-0 case có `wsgi_eof=false`. Điều này có nghĩa: trong tập test hiện tại, **không có case nào backend đọc dư bytes** sau khi consume xong message. Lý do có thể:
-- WSGI server (Gunicorn/gevent) đã tiêu hóa hết stream theo đúng CL.
-- Hoặc các edge case TE.CL bị reject sớm, không đến được stage WSGI read.
-
-→ Cần thêm seed test TE.CL "tinh vi hơn" (chunked với body dài hơn CL claim) để kích hoạt được anomaly này.
-
-### 4.4 A8 Fix — R6 (body_length) under both_error
-
-Trước A8 fix, R6 bị skip khi cả 2 path trả 4xx/5xx → bỏ sót case "cả 2 reject nhưng đọc lượng byte khác nhau trước khi reject". Sau fix, R6 fire trong **27 case** (NGINX:14 + HAProxy:5 + ATS:8 + Apache:0). Đáng chú ý là **0 hit ở Apache** — Apache HTTPD reject ngay từ proxy nên backend không có cơ hội đọc body.
-
----
-
-## 5. Stability Analysis
-
-Toàn bộ 165 discrepancy được lưu kèm `repeat_analysis` metadata. Với `REPEAT_COUNT=1` (baseline run), tất cả đều là single-shot — chưa có dữ liệu stability.
-
-**Khuyến nghị**: chạy thêm với `REPEAT_COUNT=3` để lọc unstable discrepancy:
-```bash
-MUTATIONS=3 RANDOM_SEED=1337 REPEAT_COUNT=3 bash run_all.sh --fuzz-only
-```
-
----
-
-## 6. So sánh trước/sau cải tiến (A1+A2+A5+A8)
-
-| Chỉ số | Baseline (7 rule, Apr 2026) | Sau A1+A2+A5+A8 (9 rule, May 2026) | Thay đổi |
-|---|---:|---:|---:|
-| NGINX → Gunicorn   | 37 | 44 | +7 |
-| HAProxy → Gunicorn | 36 | 36 | 0 |
-| ATS → gevent       | 45 | 48 | +3 |
-| Apache → Tomcat    | 36 | 37 | +1 |
-| **Tổng**           | **154** | **165** | **+11 (+7.1%)** |
-
-**Quan sát**: tăng chủ yếu ở NGINX (+7) — vì cặp này là Python WSGI, hưởng lợi đầy đủ từ R8/R9. HAProxy không tăng (do payload bị reject sớm, không vào được WSGI). Apache hầu như không tăng (Tomcat backend không trả enriched JSON).
-
----
-
-## 7. Case Study — Discrepancy điển hình
-
-### Case 1 — Pipeline Desync (NGINX, sequence:splice)
-
-```
-Triggered rules: R1, R2, R4, R5, R7
-proxy:  message_count=2,  CL=5,  TE=False
-direct: message_count=2,  CL=-1, TE=True
-Order:  cả 2 path đều thấy 2 UUID đúng thứ tự
-```
-
-→ Cả 2 path thấy 2 message nhưng proxy normalize chunked → raw (CL=5, TE=False), backend direct giữ nguyên chunked (CL=-1, TE=True). Đây là kinh điển NGINX rewrite TE → CL khi forward.
-
-### Case 2 — Request Smuggling Candidate (HAProxy, byte:inject_smuggling_prefix)
-
-```
-Notable: Proxy detected 0 request(s), but Backend detected 1 request(s).
-```
-
-→ HAProxy reject toàn bộ payload (status 0 nghĩa là không có response), nhưng nếu gửi thẳng vào Gunicorn thì Gunicorn chấp nhận. Mutator `inject_smuggling_prefix` thành công tạo payload mà HAProxy không tài nào parse. Đây là tín hiệu HAProxy có policy chặt hơn Gunicorn — **không phải vulnerability**, mà là điểm cộng phòng thủ của HAProxy.
-
-### Case 3 — Content Discrepancy without Length (R9, ATS+gevent)
-
-```
-proxy   body_length=5  hash=f0393feb...
-direct  body_length=0  hash=e3b0c442... (empty)
-```
-→ Mutator `message:field_line_duplicate` đã làm gevent backend (direct) không đọc được body, nhưng qua ATS thì đọc được 5 byte. Cần replay để biết ATS đã forward "5 byte ảo" gì.
-
----
-
-## 8. Hạn chế của testbed
-
-| Hạn chế so với HDHUNTER paper | Trạng thái trong project |
+| Hang muc | Gia tri |
 |---|---|
-| Không có internal parser state cho proxy | Mitigated: backend WSGI expose `cl_env`, `wsgi_eof`, `body_hash` (gray-box ở backend side) |
-| Không có coverage feedback | Chưa có — mutation random theo seed 1337 |
-| Không có QEMU snapshot | Mitigation: mỗi test fresh TCP connection, có thể restart container giữa batch |
-| Không tự động xác nhận exploitability | Chỉ ra **attack candidate**, cần replay PoC để khẳng định |
-| Chưa có response-side harness đầy đủ | Test chỉ request-side, response-side chỉ qua R7/R8/R9 (heuristic) |
-| Apache+Tomcat thiếu R8/R9 | Tomcat là Java servlet, không trả enriched JSON — chỉ R1-R7 áp dụng |
+| RNG seeds | 1337, 1338, 1339, 1340, 1341 |
+| Target environments | NGINX/Gunicorn, HAProxy/Gunicorn, ATS/gevent, Apache/Tomcat |
+| Request seeds | 12 golden HTTP request seeds |
+| Response seeds | 5 malformed HTTP response seeds |
+| Mutations/seed | 3 mutations + 1 original |
+| Snapshot/reset | `RESTART_EVERY=1` cho ca request-side va response-side |
+| Request-side expected | 4 env x 5 seeds x 12 request seeds x 4 variants = 960 tests |
+| Response-side expected | 4 env x 5 seeds x 5 response seeds x 4 variants = 400 tests |
+| Tong expected | **1360 logical tests** |
 
----
-
-## 9. Kết luận
-
-1. **Bộ test 192 ca** ghi nhận **165 discrepancy** trên 4 cặp Proxy ↔ Backend, hit rate trung bình **85.9%**. Số liệu này khẳng định **mọi cặp Proxy-Backend phổ biến đều có parser discrepancy** — đúng tinh thần paper.
-
-2. **Cải tiến A1+A2+A5+A8** thêm 11 discrepancy mới (+7.1%) và bắt được 2 nhóm pattern paper đề cập mà version cũ bỏ sót:
-   - R8 (Order) → Response Stealing candidate (paper §5.3.3).
-   - R9 (body_hash) → Content discrepancy với cùng body length (paper §5.2.5).
-
-3. **ATS đứng đầu** về discrepancy rate (100%) và Response candidate (77%) — khớp với paper §5.2.2 (ATS không sanitize trailer).
-
-4. **HAProxy đứng cuối** về raw discrepancy count nhưng cao về Smuggling candidate — gợi ý HAProxy reject sớm là policy hợp lý.
-
-5. **Discrepancy ≠ vulnerability**. Để khẳng định khai thác được, bước tiếp theo cần:
-   - Replay payload nghi ngờ → backend connection được reuse có thực sự nhận request ẩn.
-   - tcpdump capture giữa proxy ↔ backend → biết proxy forward thật sự gì.
-   - Response-side harness (fake upstream) để minh họa Response Stealing/Forgery.
-
----
-
-## Reproduce
+Reproduce command:
 
 ```bash
-cd /home/lehuuhoang/project
-bash run_all.sh --stop                    # dừng env cũ nếu có
-bash run_all.sh                           # start + fuzz tất cả
-# hoặc
-MUTATIONS=3 RANDOM_SEED=1337 bash run_all.sh --fuzz-only
-python3 05_analyzer/triage.py             # triage
+time RNG_SEEDS="1337 1338 1339 1340 1341" \
+MUTATIONS=3 \
+RESTART_EVERY=1 \
+bash run_paper_style_experiment.sh 2>&1 | tee outputs/paper_style_experiment_full.log
 ```
 
-Logs lưu tại: `/tmp/fuzz_baseline.log`, `/tmp/triage.log`.
-Reports JSON: `05_analyzer/crash_reports/discrepancy_*.json`.
-Baseline cũ (trước A1+A2+A5+A8): `05_analyzer/crash_reports_baseline_pre_A1A2A5A8/`.
+## 2. Tong quan ket qua
+
+| Nhom test | Discrepancies | Expected tests | Hit rate |
+|---|---:|---:|---:|
+| Request-side | 559 | 960 | 58.2% |
+| Response-side | 376 | 400 | 94.0% |
+| **Tong** | **935** | **1360** | **68.8%** |
+
+Dien giai: hit rate la ti le test tao ra discrepancy report, **khong phai** ti le lo hong. Discrepancy chi la tin hieu can replay, tcpdump/wire-tap va chung minh security impact.
+
+## 3. Request-side results
+
+| Moi truong | s1337 | s1338 | s1339 | s1340 | s1341 | Tong | Mean | Stddev | Hit rate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| NGINX 1.25 -> Gunicorn | 28 | 38 | 36 | 33 | 30 | 165 | 33.0 | +/-3.69 | 68.8% |
+| HAProxy 2.9 -> Gunicorn | 30 | 22 | 26 | 19 | 24 | 121 | 24.2 | +/-3.71 | 50.4% |
+| ATS -> gevent | 23 | 23 | 28 | 23 | 29 | 126 | 25.2 | +/-2.71 | 52.5% |
+| Apache HTTPD -> Tomcat 10 | 28 | 30 | 35 | 28 | 26 | 147 | 29.4 | +/-3.07 | 61.3% |
+| **Tong request-side** | 109 | 113 | 125 | 103 | 109 | **559** | **111.8** | +/-7.33 | **58.2%** |
+
+Nhan xet chinh:
+
+- NGINX/Gunicorn co hit rate request-side cao nhat: 165/240 = 68.8%.
+- HAProxy/Gunicorn tang len 121 reports so voi bao cao cu, chu yeu do restart moi test lam trang thai sach hon.
+- ATS/gevent van co diversity cao nhat, phu hop de chon replay sau.
+- Apache/Tomcat co it smuggling-count mismatch nhung nhieu tin hieu TE/CL/content mismatch.
+
+## 4. Response-side results
+
+| Moi truong | s1337 | s1338 | s1339 | s1340 | s1341 | Tong | Mean | Stddev | Hit rate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| NGINX 1.25 -> Gunicorn | 19 | 19 | 19 | 20 | 20 | 97 | 19.4 | +/-0.49 | 97.0% |
+| HAProxy 2.9 -> Gunicorn | 20 | 20 | 20 | 20 | 20 | 100 | 20.0 | +/-0.00 | 100.0% |
+| ATS -> gevent | 16 | 17 | 16 | 15 | 15 | 79 | 15.8 | +/-0.75 | 79.0% |
+| Apache HTTPD -> Tomcat 10 | 20 | 20 | 20 | 20 | 20 | 100 | 20.0 | +/-0.00 | 100.0% |
+| **Tong response-side** | 75 | 76 | 75 | 75 | 75 | **376** | **75.2** | +/-0.40 | **94.0%** |
+
+Nhan xet chinh:
+
+- HAProxy va Apache dat 100/100 response-side: moi response seed/mutation deu tao discrepancy quan sat duoc.
+- NGINX dat 97/100, chi co 3 case khong tao discrepancy.
+- ATS thap hon ro ret o response-side: 79/100, tuc co nhieu case proxy/client output gan voi fake upstream hon.
+- Response-side discrepancy can dien giai can than: day co the la forwarding/sanitization/normalization khac nhau, chua tu dong dong nghia voi exploit.
+
+## 5. Rule frequency
+
+| Rule | Field | Request-side | Response-side | Tong |
+|---|---|---:|---:|---:|
+| R1 | `observed_response_count` | 165 | 87 | 252 |
+| R2 | `observed_messages_parsed` | 165 | 87 | 252 |
+| R3 | `status` | 256 | 244 | 500 |
+| R4 | `transfer_encoding` | 221 | 0 | 221 |
+| R5 | `content_length` | 147 | 0 | 147 |
+| R6 | `body_length` | 143 | 0 | 143 |
+| R7 | `raw_response_length` | 416 | 364 | 780 |
+| R8 | `response_order` | 250 | 0 | 250 |
+| R9 | `body_hash` | 63 | 0 | 63 |
+
+Rule theo request-side tung moi truong:
+
+| Moi truong | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| NGINX 1.25 -> Gunicorn | 70 | 70 | 106 | 90 | 45 | 71 | 157 | 119 | 22 |
+| HAProxy 2.9 -> Gunicorn | 47 | 47 | 75 | 39 | 5 | 31 | 81 | 77 | 25 |
+| ATS -> gevent | 44 | 44 | 55 | 18 | 26 | 41 | 83 | 51 | 16 |
+| Apache HTTPD -> Tomcat 10 | 4 | 4 | 20 | 74 | 71 | 0 | 95 | 3 | 0 |
+
+Nhan xet rule:
+
+- R7 `raw_response_length` van la rule nhieu nhat, nen phai xem day la tin hieu rong va can replay xac nhan.
+- R8 `response_order` rat manh tren NGINX request-side: 119 lan, cho thay order oracle bang `X-Desync-Id` co dong gop ro.
+- R9 `body_hash` bat duoc 63 truong hop content khac nhau du length co the khong du bieu dien khac biet.
+- Response-side chu yeu kich hoat R1/R2/R3/R7; cac rule WSGI/CGI nhu R4-R6/R8/R9 khong co nhieu y nghia trong mode response vi ground truth la raw fake upstream response.
+
+## 6. Confidence va stability
+
+| Request-side moi truong | High | Low | % Low |
+|---|---:|---:|---:|
+| NGINX 1.25 -> Gunicorn | 165 | 0 | 0.0% |
+| HAProxy 2.9 -> Gunicorn | 109 | 12 | 9.9% |
+| ATS -> gevent | 87 | 39 | 31.0% |
+| Apache HTTPD -> Tomcat 10 | 112 | 35 | 23.8% |
+
+Low confidence nghia la co `partial_timeout=True`; khi do R7 da bi suppress trong detector, nhung cac tin hieu con lai van nen replay. ATS va Apache/Tomcat co low-confidence cao hon do keep-alive/timeout behavior dai hon.
+
+## 7. Diversity va attack candidates
+
+| Moi truong | Request signatures | Response signatures |
+|---|---:|---:|
+| NGINX 1.25 -> Gunicorn | 14 | 5 |
+| HAProxy 2.9 -> Gunicorn | 18 | 5 |
+| ATS -> gevent | 21 | 4 |
+| Apache HTTPD -> Tomcat 10 | 7 | 5 |
+
+| Nhom candidate | Request-side | Response-side | Tong |
+|---|---:|---:|---:|
+| Request Smuggling candidate | 165 | 87 | 252 |
+| Request Confusing candidate | 243 | 192 | 435 |
+| Response Stealing/Forgery candidate | 151 | 97 | 248 |
+
+Luu y: cac nhan candidate duoc suy ra heuristic tu rule set, khong phai bang chung khai thac. Muon nang len vulnerability phai replay persistent connection va chung minh request/response queue bi chiem hoac policy bi bypass.
+
+## 8. Triage.py classification
+
+Phan nay tong hop theo dung logic classification trong `05_analyzer/triage.py`, nhung chi chay tren archive sach `crash_reports_run_1337..1341`.
+
+### 8.1 Taxonomy (Desync Shapes)
+
+| Triage label | Reports | Ti le |
+|---|---:|---:|
+| Response-side: length/order discrepancy | 488 | 52.2% |
+| Possible Request-side Desync: paths emitted different numbers of HTTP responses | 252 | 27.0% |
+| Possible Request-side Desync: response content/length differs | 195 | 20.9% |
+
+### 8.2 Primary Discrepancies
+
+| Triage label | Reports | Ti le |
+|---|---:|---:|
+| Incomplete response sanitization (Validation Bypass) | 372 | 39.8% |
+| Incomplete response sanitization (Raw byte difference) | 285 | 30.5% |
+| Non-standard number parsing | 204 | 21.8% |
+| Differing TE.CL handling strategies | 44 | 4.7% |
+| Other | 21 | 2.2% |
+| Inconsistent trailer section handling | 9 | 1.0% |
+
+### 8.3 Attack Candidates
+
+| Triage label | Reports | Ti le |
+|---|---:|---:|
+| Request Confusing candidate (requires semantic validation) | 435 | 46.5% |
+| Request Smuggling candidate (requires replay/PoC) | 252 | 27.0% |
+| Response Stealing/Forgery candidate (requires response-queue PoC) | 248 | 26.5% |
+
+### 8.4 Insights
+
+| Triage label | Reports | Ti le |
+|---|---:|---:|
+| Programming language quirks (Number Parsing routines) | 431 | 46.1% |
+| Protocol translation issues (Proxy vs WSGI/CGI Mismatch) | 430 | 46.0% |
+| Non-standard HTTP RFC compliance | 57 | 6.1% |
+| Rarely-used feature handling (Trailer Sections) | 17 | 1.8% |
+
+### 8.5 Triage note
+
+- `triage.py` la heuristic classifier, khong phai exploit verifier.
+- Cac nhom "Request Smuggling", "Request Confusing", va "Response Stealing/Forgery" la danh sach uu tien de replay.
+- Section repeat stability cua `triage.py` hien can doc can than: request-side report co repeat metadata that, con response-side report dang luu `mode=response` trong cung field `repeat_analysis`, nen khong nen dung truc tiep de ket luan stability cho response-side.
+
+## 9. Mutation distribution
+
+| Mutation label | Reports |
+|---|---:|
+| `original` | 229 |
+| `sequence:splice` | 101 |
+| `byte:inject_smuggling_prefix` | 64 |
+| `byte:perturb_content_length` | 62 |
+| `byte:obfuscate_whitespace` | 61 |
+| `sequence:remove` | 55 |
+| `byte:obfuscate_transfer_encoding` | 47 |
+| `byte:byte_remove` | 45 |
+| `byte:byte_splice` | 42 |
+| `byte:byte_duplicate` | 36 |
+| `message:node_typed_swap` | 32 |
+| `byte:obfuscate_unicode_encoding` | 28 |
+| `byte:byte_insert` | 28 |
+| `message:node_token_replace` | 25 |
+| `message:field_line_duplicate` | 22 |
+| `byte:splice` | 18 |
+| `message:trailer_section_replace` | 17 |
+| `message:field_line_splice` | 14 |
+| `message:field_line_remove` | 9 |
+
+Diem dang chu y la `original` cung tao nhieu discrepancy. Dieu nay khong sai: nhieu golden seeds von da la cac edge case HTTP/1.1 mo ho nhu duplicate CL, TE.CL, CL.TE, trailer va pipelining.
+
+## 10. Han che so voi HDHUNTER paper
+
+| Han che | Trang thai trong project |
+|---|---|
+| Parser-internal state | Chua co; detector dung observed response tuple va JSON do backend expose. |
+| Coverage-directed feedback | Co approximation o backend Python bang coverage.py; chua co combined edge map cua proxy + backend. |
+| Snapshot executor | Dung `docker compose restart`, khong phai QEMU snapshot/restore. |
+| Exploit confirmation | Discrepancy moi la candidate; can replay/tcpdump/PoC de chung minh security impact. |
+| Response-side oracle | So sanh raw fake upstream response voi output qua proxy; de bat normalization khac nhau, can phan tich thu cong. |
+| Tomcat state enrichment | JSP backend thieu mot so field enriched nhu WSGI body_hash/wsgi_eof day du. |
+
+## 11. Ket luan
+
+1. Full run sach theo 5 RNG seeds tao ra **935 discrepancies / 1360 tests = 68.8%**.
+2. Request-side dat **559 / 960 = 58.2%**; response-side dat **376 / 400 = 94.0%**.
+3. Restart moi logical test cho ca request-side va response-side giup ket qua dang tin hon so voi cau hinh cu restart moi 24 test.
+4. NGINX noi bat o R8 response order; ATS co request-side signature diversity cao nhat; HAProxy va Apache noi bat o response-side 100%.
+5. Buoc tiep theo nen chon top candidates co R1/R2/R8/R9, replay tren persistent connection, bat wire-tap/tcpdump giua proxy va backend, roi moi ket luan vulnerability.
+
+## 12. Artifacts
+
+| Artifact | Noi dung |
+|---|---|
+| `05_analyzer/crash_reports_run_1337/` | 184 discrepancy JSON reports |
+| `05_analyzer/crash_reports_run_1338/` | 189 discrepancy JSON reports |
+| `05_analyzer/crash_reports_run_1339/` | 200 discrepancy JSON reports |
+| `05_analyzer/crash_reports_run_1340/` | 178 discrepancy JSON reports |
+| `05_analyzer/crash_reports_run_1341/` | 184 discrepancy JSON reports |
+| `outputs/paper_style_experiment_full.log` | Log chay full experiment |
+| `05_analyzer/triage_all_runs.txt` | Co the bi lan report cu neu scan ca `05_analyzer`; report nay dung archive clean o `crash_reports_run_*`. |
+

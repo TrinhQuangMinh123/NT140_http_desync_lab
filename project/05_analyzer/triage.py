@@ -33,14 +33,16 @@ def parse_reports(json_files):
 
 
 def classify_taxonomy(report: dict) -> str:
-    """1. Taxonomy (Desync Shapes)"""
+    """1. Taxonomy (Desync Shapes) — wording reflects OBSERVED responses,
+    not parser-internal request count (project does not instrument the
+    parser; see diff_checker.py module docstring)."""
     rules = [r["rule"] for r in report.get("triggered_rules", [])]
-    
+
     if 1 in rules or 2 in rules:
-        return "Request-side: Inconsistent number of messages"
+        return "Possible Request-side Desync: paths emitted different numbers of HTTP responses"
     elif 4 in rules or 5 in rules or 6 in rules:
-        return "Request-side: Inconsistent message content"
-    return "Response-side: Length discrepancy"
+        return "Possible Request-side Desync: response content/length differs"
+    return "Response-side: length/order discrepancy"
 
 
 def classify_discrepancy(report: dict) -> str:
@@ -134,18 +136,25 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="Triage HTTP Desync crash reports")
     parser.add_argument("--label", default="", help="Filter reports by target label (e.g., nginx_gunicorn)")
+    parser.add_argument("--reports-dir", default=REPORTS_DIR,
+                        help="Directory containing discrepancy JSON reports")
+    parser.add_argument("--recursive", action="store_true",
+                        help="Scan reports-dir recursively for discrepancy JSON reports")
     args = parser.parse_args()
 
-    if not os.path.exists(REPORTS_DIR):
-        print(f"[!] Crash reports directory not found at: {REPORTS_DIR}")
+    reports_dir = os.path.abspath(args.reports_dir)
+    if not os.path.exists(reports_dir):
+        print(f"[!] Crash reports directory not found at: {reports_dir}")
         return
 
-    json_files = glob.glob(os.path.join(REPORTS_DIR, "*.json"))
+    pattern = "**/*.json" if args.recursive else "*.json"
+    json_files = glob.glob(os.path.join(reports_dir, pattern), recursive=args.recursive)
+    json_files = [f for f in json_files if os.path.basename(f).startswith("discrepancy_")]
     if args.label:
         json_files = [f for f in json_files if args.label in os.path.basename(f)]
 
     if not json_files:
-        print(f"[!] No JSON reports found in {REPORTS_DIR} for label '{args.label}'")
+        print(f"[!] No JSON reports found in {reports_dir} for label '{args.label}'")
         return
 
     reports = parse_reports(json_files)
@@ -153,6 +162,7 @@ def main():
     
     print("=" * 70)
     print("  HDHUNTER-INSPIRED TAXONOMY & HTTP DESYNC ANALYSIS")
+    print(f"  Reports Dir: {reports_dir}")
     if args.label:
         print(f"  Target Filter: {args.label}")
     print(f"  Total discrepancies analyzed: {total}")
@@ -177,17 +187,24 @@ def main():
     print_stability_summary(reports)
 
     # Highlight a candidate that should be replayed manually.
-    print("\n\033[1;93m[*] Notable Request Smuggling Candidate (Pipeline Desync Signal):\033[0m")
+    print("\n\033[1;93m[*] Notable Pipeline-Desync Candidate (Smuggling shortlist):\033[0m")
     found_candidate = False
     for r in reports:
-        if "Inconsistent number" in classify_taxonomy(r):
+        if "different numbers of HTTP responses" in classify_taxonomy(r):
             found_candidate = True
             print(f"  - File: {r['filename']}")
             print(f"  - Mutator used: {r.get('mutation_label')}")
-            proxy_count = r['proxy_state']['message_count']
-            direct_count = r['direct_state']['message_count']
-            print(f"  - Detail: Proxy detected {proxy_count} request(s), but Backend detected {direct_count} request(s). Replay/PoC is required before calling this exploitable.")
-            break 
+            # Field names changed (proxy_state.observed_response_count); fall
+            # back to old key for backwards compat with archived reports.
+            proxy_count = (r['proxy_state'].get('observed_response_count')
+                           or r['proxy_state'].get('message_count'))
+            direct_count = (r['direct_state'].get('observed_response_count')
+                            or r['direct_state'].get('message_count'))
+            print(f"  - Detail: Proxy path observed {proxy_count} HTTP response(s), "
+                  f"backend-direct path observed {direct_count}. "
+                  f"This is a wire-level observation, NOT proof of a hidden request — "
+                  f"replay + traffic capture required before calling this exploitable.")
+            break
     if not found_candidate:
         print("  - None in the selected report set.")
     print()

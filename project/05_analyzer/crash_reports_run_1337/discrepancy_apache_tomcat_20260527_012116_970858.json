@@ -1,0 +1,79 @@
+{
+  "target": "apache_tomcat",
+  "timestamp": "20260527_012116_970858",
+  "seed_index": 3,
+  "mutation_index": 0,
+  "mutation_label": "original",
+  "payload_sha256": "1053763a2a6556da8e9c53fd812a78df069757f73273cf5babee71d65a5161ef",
+  "confidence": "high",
+  "diff_notes": [],
+  "triggered_rules": [
+    {
+      "rule": 4,
+      "field": "transfer_encoding (chunked)",
+      "proxy": false,
+      "direct": true,
+      "note": "Transfer-Encoding handling differs between the two paths"
+    },
+    {
+      "rule": 5,
+      "field": "wsgi_content_length",
+      "proxy": 4,
+      "direct": -1,
+      "note": "Content-Length handling differs between the two paths"
+    },
+    {
+      "rule": 7,
+      "field": "raw_response_length",
+      "proxy": 532,
+      "direct": 509,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": 4,
+    "wsgi_transfer_encoding": false,
+    "wsgi_body_length": 4,
+    "raw_response_length": 532,
+    "response_order": [
+      "c86ddea079fb4033b33f27a2360b71c2"
+    ],
+    "body_hash": "",
+    "wsgi_eof": null,
+    "cov_new_edges": null,
+    "partial_timeout": false
+  },
+  "direct_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": true,
+    "wsgi_body_length": 4,
+    "raw_response_length": 509,
+    "response_order": [
+      "c86ddea079fb4033b33f27a2360b71c2"
+    ],
+    "body_hash": "",
+    "wsgi_eof": null,
+    "cov_new_edges": null,
+    "partial_timeout": false
+  },
+  "repeat_analysis": {
+    "repeat_attempts": 1,
+    "completed_repeats": 1,
+    "skipped_repeats": 0,
+    "discrepancy_runs": 1,
+    "stable_discrepancy": true,
+    "unique_rule_sets": [
+      [
+        4,
+        5,
+        7
+      ]
+    ]
+  }
+}

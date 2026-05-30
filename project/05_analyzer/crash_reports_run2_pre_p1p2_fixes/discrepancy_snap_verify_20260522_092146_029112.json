@@ -1,0 +1,57 @@
+{
+  "target": "snap_verify",
+  "timestamp": "20260522_092146_029112",
+  "seed_index": 5,
+  "mutation_index": 1,
+  "mutation_label": "message:field_line_remove",
+  "payload_sha256": "79a97de32a80b4bde7901e02aa0a0e86844d1c3308b3820943e62067664128d1",
+  "triggered_rules": [
+    {
+      "rule": 7,
+      "field": "consumed_length",
+      "proxy": 694,
+      "direct": 677,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": 11,
+    "transfer_encoding": null,
+    "body_length": 11,
+    "consumed_length": 694,
+    "order": [
+      "d4192c726d5845a49443c35313675829"
+    ],
+    "body_hash": "3d011e09502a8455",
+    "wsgi_eof": true
+  },
+  "direct_state": {
+    "status": 200,
+    "message_count": 1,
+    "message_processed": 1,
+    "content_length": 11,
+    "transfer_encoding": null,
+    "body_length": 11,
+    "consumed_length": 677,
+    "order": [
+      "d4192c726d5845a49443c35313675829"
+    ],
+    "body_hash": "3d011e09502a8455",
+    "wsgi_eof": true
+  },
+  "repeat_analysis": {
+    "repeat_attempts": 1,
+    "completed_repeats": 1,
+    "skipped_repeats": 0,
+    "discrepancy_runs": 1,
+    "stable_discrepancy": true,
+    "unique_rule_sets": [
+      [
+        7
+      ]
+    ]
+  }
+}

@@ -17,6 +17,37 @@ import json
 import time
 import hashlib
 
+# ── Coverage instrumentation (paper §4.2.3-style, Python side only) ──────────
+# Track line coverage per request so the fuzzer can grow its corpus when an
+# input exercises previously-unseen edges.  Real HDHUNTER instruments the
+# bytecode interpreter via Witcher [47]; we approximate with coverage.py at
+# the WSGI layer — enough to claim "semi-gray-box on the backend".
+try:
+    import coverage  # type: ignore
+    _COV = coverage.Coverage(branch=True, data_file=None)
+    _COV.start()
+    _COV_AVAILABLE = True
+except Exception:
+    _COV = None
+    _COV_AVAILABLE = False
+
+_SEEN_LINES = set()  # process-wide accumulator
+_REQ_COUNTER = 0
+
+
+def _snapshot_coverage():
+    """Return the set of (file, line) tuples touched so far."""
+    if not _COV_AVAILABLE:
+        return set()
+    _COV.stop()
+    data = _COV.get_data()
+    pairs = set()
+    for filename in data.measured_files():
+        for line in data.lines(filename) or []:
+            pairs.add((filename, line))
+    _COV.start()
+    return pairs
+
 
 def application(environ, start_response):
     state = {}
@@ -52,6 +83,21 @@ def application(environ, start_response):
     state["x_real_ip"]   = environ.get("HTTP_X_REAL_IP")
     state["x_desync_id"] = environ.get("HTTP_X_DESYNC_ID")
     state["timestamp"]   = time.time()
+
+    # ── Coverage delta for this request ──────────────────────────────────────
+    global _REQ_COUNTER, _SEEN_LINES
+    _REQ_COUNTER += 1
+    if _COV_AVAILABLE:
+        after = _snapshot_coverage()
+        new_pairs = after - _SEEN_LINES
+        _SEEN_LINES = after
+        # Only report new edges to keep payload size manageable.
+        state["cov_new_edges"]   = len(new_pairs)
+        state["cov_total_edges"] = len(after)
+        state["cov_request_id"]  = _REQ_COUNTER
+    else:
+        state["cov_new_edges"]   = None
+        state["cov_total_edges"] = None
 
     response_headers = [("Content-Type", "application/json")]
     if state["x_desync_id"]:

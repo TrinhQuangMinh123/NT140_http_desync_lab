@@ -7,6 +7,9 @@ services:
       - "8890:8890"
     depends_on:
       - backend
+    # Reach host-side fake_upstream (response-side harness, port 9501).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   backend:
     image: python:3.12-slim
@@ -14,6 +17,6 @@ services:
     volumes:
       - ./backend:/app
     command: >
-      sh -c "pip install gunicorn -q && gunicorn --bind 0.0.0.0:9003 app:application"
+      sh -c "pip install gunicorn coverage -q && gunicorn --bind 0.0.0.0:9003 app:application"
     ports:
       - "9003:9003"

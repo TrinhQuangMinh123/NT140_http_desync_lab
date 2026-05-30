@@ -1,8 +1,0 @@
-POST /post HTTP/1.1
-Host: httpbin.org
-Transfer-Encodiƒng: chunked
-Connection: close
-
-5;ext=true
-ABCDE
-0

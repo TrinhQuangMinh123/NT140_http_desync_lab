@@ -1,0 +1,65 @@
+{
+  "target": "ats_gevent",
+  "timestamp": "20260527_025150_722728",
+  "seed_index": 10,
+  "mutation_index": 1,
+  "mutation_label": "sequence:splice",
+  "payload_sha256": "53431a17ecbb9299b3d8215c6d4d6d3debda2a0cf4092b5a35cbb52a9007ddc4",
+  "confidence": "high",
+  "diff_notes": [],
+  "triggered_rules": [
+    {
+      "rule": 7,
+      "field": "raw_response_length",
+      "proxy": 1281,
+      "direct": 1178,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "observed_response_count": 2,
+    "observed_messages_parsed": 2,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": null,
+    "wsgi_body_length": 0,
+    "raw_response_length": 1281,
+    "response_order": [
+      "f646d7ec45014a69acf98170bea7c236",
+      "61bf20fab29d44c6bd3350c9af99e7cc"
+    ],
+    "body_hash": "e3b0c44298fc1c14e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "partial_timeout": false
+  },
+  "direct_state": {
+    "status": 200,
+    "observed_response_count": 2,
+    "observed_messages_parsed": 2,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": null,
+    "wsgi_body_length": 0,
+    "raw_response_length": 1178,
+    "response_order": [
+      "f646d7ec45014a69acf98170bea7c236",
+      "61bf20fab29d44c6bd3350c9af99e7cc"
+    ],
+    "body_hash": "e3b0c44298fc1c14e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "partial_timeout": false
+  },
+  "repeat_analysis": {
+    "repeat_attempts": 1,
+    "completed_repeats": 1,
+    "skipped_repeats": 0,
+    "discrepancy_runs": 1,
+    "stable_discrepancy": true,
+    "unique_rule_sets": [
+      [
+        7
+      ]
+    ]
+  }
+}

@@ -4,6 +4,7 @@
 # Usage:
 #   bash run_all.sh              # Start all envs + fuzz all targets
 #   bash run_all.sh --stop       # Stop all environments
+#   bash run_all.sh --start-only # Start all environments, do not fuzz
 #   bash run_all.sh --fuzz-only  # Skip docker startup, fuzz existing targets
 # Optional env:
 #   MUTATIONS=3 RANDOM_SEED=1337 REPEAT_COUNT=3 bash run_all.sh --fuzz-only
@@ -28,6 +29,7 @@ TARGET_ORDER=("nginx_gunicorn" "haproxy_flask" "ats_gevent" "apache_tomcat")
 MUTATIONS="${MUTATIONS:-3}"
 RANDOM_SEED="${RANDOM_SEED:-1337}"
 REPEAT_COUNT="${REPEAT_COUNT:-1}"
+RESTART_EVERY="${RESTART_EVERY:-1}"   # 1 = restart after every logical test case for maximum isolation
 
 # ─── Color helpers ─────────────────────────────────────────
 RED='\033[0;91m'; GREEN='\033[0;92m'; CYAN='\033[1;96m'; NC='\033[0m'
@@ -76,14 +78,17 @@ fuzz_all() {
   
   for name in "${TARGET_ORDER[@]}"; do
     IFS=':' read -r proxy_port backend_port <<< "${TARGETS[$name]}"
+    compose_file="$TARGETS_DIR/$name/docker-compose.yml"
     echo ""
-    info "Fuzzing: $name  |  Proxy=127.0.0.1:$proxy_port  Backend=127.0.0.1:$backend_port  Seed=$RANDOM_SEED  Repeat=$REPEAT_COUNT"
+    info "Fuzzing: $name  |  Proxy=127.0.0.1:$proxy_port  Backend=127.0.0.1:$backend_port  Seed=$RANDOM_SEED  Repeat=$REPEAT_COUNT  RestartEvery=$RESTART_EVERY"
     python3 "$FUZZER" \
       --proxy-port "$proxy_port" \
       --backend-port "$backend_port" \
       --mutations "$MUTATIONS" \
       --random-seed "$RANDOM_SEED" \
       --repeat "$REPEAT_COUNT" \
+      --restart-every "$RESTART_EVERY" \
+      --compose-file "$compose_file" \
       --quiet \
       --label "$name" || warn "Fuzzer error on $name — continuing."
     success "Done fuzzing $name."
@@ -99,6 +104,8 @@ main() {
   case "${1:-}" in
     --stop)
       stop_targets; exit 0 ;;
+    --start-only)
+      generate_seeds; start_targets; exit 0 ;;
     --fuzz-only)
       generate_seeds; fuzz_all ;;
     *)

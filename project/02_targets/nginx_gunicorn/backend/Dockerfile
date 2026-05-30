@@ -2,8 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install Gunicorn
-RUN pip install --no-cache-dir gunicorn==21.2.0
+# Install Gunicorn + coverage (per-request line tracking, paper §4.2.3-equivalent)
+RUN pip install --no-cache-dir gunicorn==21.2.0 coverage==7.4.4
 
 COPY app.py .
 

@@ -1,8 +1,34 @@
 """
 app.py - State Tuple Backend (shared across all target environments)
-Returns enriched JSON state tuple (HDHunter-inspired: cl_env, body_hash, wsgi_eof).
+Returns enriched JSON state tuple (HDHunter-inspired: cl_env, body_hash,
+wsgi_eof, plus cov_new_edges for semi-gray-box coverage feedback).
 """
 import json, time, hashlib
+
+try:
+    import coverage  # type: ignore
+    _COV = coverage.Coverage(branch=True, data_file=None)
+    _COV.start()
+    _COV_AVAILABLE = True
+except Exception:
+    _COV = None
+    _COV_AVAILABLE = False
+
+_SEEN_LINES = set()
+_REQ_COUNTER = 0
+
+
+def _snapshot_coverage():
+    if not _COV_AVAILABLE:
+        return set()
+    _COV.stop()
+    data = _COV.get_data()
+    pairs = set()
+    for filename in data.measured_files():
+        for line in data.lines(filename) or []:
+            pairs.add((filename, line))
+    _COV.start()
+    return pairs
 
 
 def application(environ, start_response):
@@ -37,6 +63,19 @@ def application(environ, start_response):
     state["x_real_ip"]   = environ.get("HTTP_X_REAL_IP")
     state["x_desync_id"] = environ.get("HTTP_X_DESYNC_ID")
     state["timestamp"]   = time.time()
+
+    global _REQ_COUNTER, _SEEN_LINES
+    _REQ_COUNTER += 1
+    if _COV_AVAILABLE:
+        after = _snapshot_coverage()
+        new_pairs = after - _SEEN_LINES
+        _SEEN_LINES = after
+        state["cov_new_edges"]   = len(new_pairs)
+        state["cov_total_edges"] = len(after)
+        state["cov_request_id"]  = _REQ_COUNTER
+    else:
+        state["cov_new_edges"]   = None
+        state["cov_total_edges"] = None
 
     response_headers = [("Content-Type", "application/json")]
     if state["x_desync_id"]:

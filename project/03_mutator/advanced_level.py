@@ -52,40 +52,71 @@ def obfuscate_whitespace(payload: bytes) -> bytes:
 
 def obfuscate_unicode_encoding(payload: bytes) -> bytes:
     """
-    Use full-width Unicode characters and hex-encoding to bypass WAFs
-    and confuse Content-Length calculations.
+    Inject non-ASCII or otherwise odd encodings into Content-Length / chunk
+    sizes to trip up parser number handling (paper §5.2.1).
+
+    The whole HTTP request is built and shipped in latin-1 (so byte-level
+    fidelity is preserved). To probe non-ASCII behaviour we explicitly
+    splice UTF-8 bytes for full-width digits, then reassemble. The old
+    implementation tried to `text.encode('latin-1')` containing full-width
+    chars, which always threw and fell back to the original payload — no
+    Unicode signal ever reached the server.
     """
     try:
         text = payload.decode('latin-1')
-        
-        # Full-width numeric map (U+FF10 to U+FF19)
-        full_width_map = str.maketrans("0123456789", "０１２３４５６７８９")
-        
-        # Obfuscate CL numbers using full-width or scientific notation
+
+        # Strategies that stay in latin-1 (always safe to encode).
+        ascii_strategies = [
+            lambda x: f"+{x}",
+            lambda x: f"-0{x}",
+            lambda x: f"0x{int(x):x}",
+            lambda x: x.zfill(len(x) + 3),  # extra zero padding
+        ]
+
         if re.search(r"Content-Length: \d+", text):
             match = re.search(r"Content-Length: (\d+)", text)
             if match:
                 cl_val = match.group(1)
-                
-                strategies = [
-                    lambda x: x.translate(full_width_map),  # "10" -> "１０"
-                    lambda x: f"+{x}",                      # "10" -> "+10"
-                    lambda x: f"-0{x}",                     # "10" -> "-010"
-                    lambda x: f"0x{int(x):x}",              # "10" -> "0xa" (Hex notation)
-                ]
-                
-                malformed_cl = random.choice(strategies)(cl_val)
-                text = text.replace(f"Content-Length: {cl_val}", f"Content-Length: {malformed_cl}")
+                choice = random.random()
+                if choice < 0.5:
+                    # ASCII variant — safe path.
+                    malformed = random.choice(ascii_strategies)(cl_val)
+                    text = text.replace(
+                        f"Content-Length: {cl_val}",
+                        f"Content-Length: {malformed}",
+                    )
+                    out = text.encode('latin-1')
+                else:
+                    # UTF-8 full-width variant — splice raw UTF-8 bytes for
+                    # the digits into the latin-1 stream so the encoded
+                    # request really does contain U+FF10..U+FF19.
+                    full_width = cl_val.translate(
+                        str.maketrans("0123456789", "０１２３４５６７８９")
+                    ).encode('utf-8')
+                    head, _, tail = text.partition(f"Content-Length: {cl_val}")
+                    out = (head.encode('latin-1')
+                           + b"Content-Length: "
+                           + full_width
+                           + tail.encode('latin-1'))
+                # Optional chunk-size obfuscation (always latin-1 safe).
+                out_text = out.decode('latin-1')
+                if re.search(r"\r\n([0-9a-fA-F]+)\r\n", out_text):
+                    out_text = re.sub(
+                        r"\r\n([0-9a-fA-F]+)\r\n",
+                        r"\r\n0000000\1;ext=evil\r\n",
+                        out_text,
+                        count=1,
+                    )
+                    out = out_text.encode('latin-1')
+                return out
 
-        # Chunk size obfuscation: Injecting illegal hex characters 
-        # (e.g., instead of `b\r\n`, use `00000b;ignore-this=param\r\n`)
+        # No CL header to mutate: just maybe pad/extension a chunk size.
         if re.search(r"\r\n([0-9a-fA-F]+)\r\n", text):
-            # Pad with leading zeros and add chunk extensions
             text = re.sub(
-                r"\r\n([0-9a-fA-F]+)\r\n", 
-                r"\r\n0000000\1;ext=evil\r\n", 
-                text, 
-                count=1
+                r"\r\n([0-9a-fA-F]+)\r\n",
+                r"\r\n0000000\1;ext=evil\r\n",
+                text,
+                count=1,
             )
 
         return text.encode('latin-1')
