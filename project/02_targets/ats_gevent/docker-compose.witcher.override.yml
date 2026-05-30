@@ -1,0 +1,9 @@
+# Per-session injected shm ids for the ATS faithful pipeline (bare-key passthrough).
+# See nginx_gunicorn/docker-compose.witcher.yml for why these must stay UNSET (not "")
+# when not fuzzing — Witcher does shmat(0) on an empty value and segfaults.
+services:
+  backend:
+    environment:
+      - __AFL_SHM
+      - __EXECUTION_PATH
+      - __HTTP_PARAM

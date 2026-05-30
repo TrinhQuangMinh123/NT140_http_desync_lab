@@ -1,0 +1,57 @@
+# Full-scale faithful analysis  (05_analyzer)
+
+- Envs: nginx_gunicorn, haproxy_gunicorn, ats_gunicorn
+- Total logical cases: 719   Total discrepancies: 403 (56.1%)
+
+## Request-side discrepancies per env x seed
+
+| Env | s1337 | s1338 | s1339 | s1340 | s1341 | Tong | Mean | Stddev | Hit rate |
+|---|---|---|---|---|---|---|---|---|---|
+| NGINX 1.25 -> Gunicorn | 32 | 38 | 34 | 32 | 31 | 167 | 33.4 | +/-2.50 | 69.6% |
+| HAProxy 2.9 -> Gunicorn | 21 | 25 | 26 | 18 | 28 | 118 | 23.6 | +/-3.61 | 49.2% |
+| ATS -> Gunicorn (gevent swapped, see note) | 23 | 25 | 21 | 23 | 26 | 118 | 23.6 | +/-1.74 | 49.4% |
+| **Total** | 76 | 88 | 81 | 73 | 85 | **403** |  |  | **56.1%** |
+
+## Rule frequency per env (all 5 seeds)
+
+| Env | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 |
+|---|---|---|---|---|---|---|---|---|---|
+| NGINX 1.25 -> Gunicorn | 64 | 64 | 110 | 93 | 49 | 73 | 160 | 124 | 22 |
+| HAProxy 2.9 -> Gunicorn | 45 | 45 | 30 | 27 | 44 | 21 | 106 | 57 | 38 |
+| ATS -> Gunicorn (gevent swapped, see note) | 29 | 29 | 30 | 18 | 42 | 13 | 73 | 44 | 28 |
+
+## B6 internal-state corroboration + B8 coverage-blind (per env)
+
+| Env | Cases | cov present | distinct fp | Disc | B6 corrob | B6 resp-only | B8 blind groups |
+|---|---|---|---|---|---|---|---|
+| NGINX 1.25 -> Gunicorn | 240 | 240 (100%) | 41 | 167 | 106 | 61 | 5 |
+| HAProxy 2.9 -> Gunicorn | 240 | 239 (99%) | 43 | 118 | 40 | 78 | 5 |
+| ATS -> Gunicorn (gevent swapped, see note) | 239 | 239 (100%) | 40 | 118 | 31 | 87 | 5 |
+
+## B8 examples — same coverage fingerprint, different REAL parse state
+
+- `nginx_gunicorn` fp `3d0577067c7a..` -> 2 states:
+    count=1 consumed=[5] chunked=[True] CL=[-1]
+    count=1 consumed=[11] chunked=[True] CL=[-1]
+- `nginx_gunicorn` fp `a989afa1e10b..` -> 2 states:
+    count=1 consumed=[5] chunked=[True] CL=[-1]
+    count=1 consumed=[11] chunked=[True] CL=[-1]
+- `nginx_gunicorn` fp `49911fc7cd08..` -> 2 states:
+    count=1 consumed=[5] chunked=[True] CL=[-1]
+    count=1 consumed=[11] chunked=[True] CL=[-1]
+- `nginx_gunicorn` fp `9a728f3ffdef..` -> 2 states:
+    count=1 consumed=[6] chunked=[False] CL=[6]
+    count=1 consumed=[11] chunked=[False] CL=[11]
+- `nginx_gunicorn` fp `721c32797b8a..` -> 2 states:
+    count=1 consumed=[5] chunked=[True] CL=[-1]
+    count=1 consumed=[11] chunked=[True] CL=[-1]
+- `haproxy_gunicorn` fp `3d0577067c7a..` -> 2 states:
+    count=1 consumed=[5] chunked=[True] CL=[-1]
+    count=1 consumed=[11] chunked=[True] CL=[-1]
+- `haproxy_gunicorn` fp `49911fc7cd08..` -> 2 states:
+    count=1 consumed=[5] chunked=[True] CL=[-1]
+    count=1 consumed=[11] chunked=[True] CL=[-1]
+- `haproxy_gunicorn` fp `139356f18c1d..` -> 2 states:
+    count=1 consumed=[6] chunked=[False] CL=[6]
+    count=1 consumed=[3] chunked=[False] CL=[3]
+

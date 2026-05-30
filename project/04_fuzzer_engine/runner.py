@@ -281,7 +281,7 @@ def inject_desync_ids(payload: bytes) -> bytes:
 
 # ── Report Writer ─────────────────────────────────────────────────────────────
 
-def execute_payload(payload: bytes):
+def execute_payload(payload: bytes, shm=None):
     """
     Run one payload through proxy and direct backend once.
 
@@ -289,10 +289,30 @@ def execute_payload(payload: bytes):
     executed_payload is the byte sequence ACTUALLY sent on the wire (which
     includes the per-request X-Desync-Id headers we injected), so it can be
     saved verbatim for faithful replay.
+
+    When `shm` (a WitcherShm) is given, the backend's real per-request coverage
+    bitmap + HttpParam 7-tuple are read out-of-band: reset -> send -> read, done
+    separately for the proxy-forwarded and the direct request (both hit the same
+    single-worker backend, so they must be serialized with a reset between).
     """
     tagged = inject_desync_ids(payload)
-    proxy_raw,  proxy_to,  proxy_partial  = send_raw(PROXY_HOST,   PROXY_PORT,   tagged)
-    direct_raw, direct_to, direct_partial = send_raw(BACKEND_HOST, BACKEND_PORT, tagged)
+
+    if shm is not None:
+        shm.reset()
+        proxy_raw,  proxy_to,  proxy_partial  = send_raw(PROXY_HOST, PROXY_PORT, tagged)
+        time.sleep(0.02)  # let the backend finish writing the shm
+        # snapshot proxy-side shm BEFORE the direct send overwrites it
+        p_new, p_fp, p_tot, _ = shm.read_coverage()
+        p_cnt, p_cons, p_cl, p_chk = shm.read_state()
+
+        shm.reset()
+        direct_raw, direct_to, direct_partial = send_raw(BACKEND_HOST, BACKEND_PORT, tagged)
+        time.sleep(0.02)
+        d_new, d_fp, d_tot, _ = shm.read_coverage()
+        d_cnt, d_cons, d_cl, d_chk = shm.read_state()
+    else:
+        proxy_raw,  proxy_to,  proxy_partial  = send_raw(PROXY_HOST,   PROXY_PORT,   tagged)
+        direct_raw, direct_to, direct_partial = send_raw(BACKEND_HOST, BACKEND_PORT, tagged)
 
     if proxy_to and direct_to:
         return None, True, tagged
@@ -301,6 +321,18 @@ def execute_payload(payload: bytes):
     direct_state = StateTuple.from_raw_response(direct_raw, direct_to)
     proxy_state.partial_timeout  = proxy_partial
     direct_state.partial_timeout = direct_partial
+
+    if shm is not None:
+        for st, vals in (
+            (proxy_state,  (p_new, p_fp, p_tot, p_cnt, p_cons, p_cl, p_chk)),
+            (direct_state, (d_new, d_fp, d_tot, d_cnt, d_cons, d_cl, d_chk)),
+        ):
+            (st.cov_new_edges, st.cov_fingerprint, st.cov_total_edges,
+             st.count_real, st.consumed_real,
+             st.content_length_real, st.chunked_real) = vals
+            st.cov_fingerprint = st.cov_fingerprint or None
+            st.state_source = "httpparam-shm"
+
     return compare(proxy_state, direct_state), False, tagged
 
 
@@ -376,6 +408,13 @@ def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int,
             "body_hash":                result.proxy.body_hash,
             "wsgi_eof":                 result.proxy.wsgi_eof,
             "cov_new_edges":            result.proxy.cov_new_edges,
+            "cov_total_edges":          result.proxy.cov_total_edges,
+            "cov_fingerprint":          result.proxy.cov_fingerprint,
+            "count_real":               result.proxy.count_real,
+            "consumed_real":            result.proxy.consumed_real,
+            "content_length_real":      result.proxy.content_length_real,
+            "chunked_real":             result.proxy.chunked_real,
+            "state_source":             result.proxy.state_source,
             "partial_timeout":          result.proxy.partial_timeout,
         },
         "direct_state": {
@@ -390,6 +429,13 @@ def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int,
             "body_hash":                result.direct.body_hash,
             "wsgi_eof":                 result.direct.wsgi_eof,
             "cov_new_edges":            result.direct.cov_new_edges,
+            "cov_total_edges":          result.direct.cov_total_edges,
+            "cov_fingerprint":          result.direct.cov_fingerprint,
+            "count_real":               result.direct.count_real,
+            "consumed_real":            result.direct.consumed_real,
+            "content_length_real":      result.direct.content_length_real,
+            "chunked_real":             result.direct.chunked_real,
+            "state_source":             result.direct.state_source,
             "partial_timeout":          result.direct.partial_timeout,
         },
     }
@@ -552,10 +598,42 @@ def restart_environment(compose_file: str) -> bool:
 
 # ── Main Fuzzing Loop ─────────────────────────────────────────────────────────
 
+def _trace_execution(trace_log: str, seed_idx: int, mut_idx: int, label: str, result):
+    """Append one JSONL line per logical case (discrepancy OR same) for B6/B8.
+
+    B8 (coverage blind-spot) needs the cov_fingerprint + real state of ALL cases,
+    not just discrepancies, to count "different desync state ∧ identical fingerprint".
+    """
+    if not trace_log:
+        return
+    rec = {
+        "seed_index": seed_idx,
+        "mutation_index": mut_idx,
+        "mutation_label": label,
+        "is_discrepancy": result.is_discrepancy,
+        "rules": sorted(r["rule"] for r in result.triggered_rules),
+    }
+    for tag, st in (("proxy", result.proxy), ("direct", result.direct)):
+        rec[tag] = {
+            "cov_fingerprint": st.cov_fingerprint,
+            "cov_new_edges": st.cov_new_edges,
+            "count_real": st.count_real,
+            "consumed_real": st.consumed_real,
+            "content_length_real": st.content_length_real,
+            "chunked_real": st.chunked_real,
+            # legacy wire-derived, for the B6 false-positive audit:
+            "wire_count": st.message_count,
+            "wire_consumed": st.consumed_length,
+        }
+    with open(trace_log, "a") as f:
+        f.write(json.dumps(rec) + "\n")
+
+
 def run_fuzzer(seeds: list, num_mutations: int, quiet: bool,
                target_label: str = "", repeat_count: int = 1,
                restart_every: int = 0, compose_file: str = "",
-               grow_corpus: bool = True, wire_tap_log: str = ""):
+               grow_corpus: bool = True, wire_tap_log: str = "", shm=None,
+               trace_log: str = ""):
     """
     Main differential fuzzing loop.
     Main fuzzing loop inspired by HDHunter's differential executor design.
@@ -610,7 +688,7 @@ def run_fuzzer(seeds: list, num_mutations: int, quiet: bool,
             last_executed = payload  # fallback for saving if all repeats skipped
             for repeat_idx in range(repeat_count):
                 executions += 1
-                result, skipped_run, executed = execute_payload(payload)
+                result, skipped_run, executed = execute_payload(payload, shm=shm)
                 last_executed = executed
                 if skipped_run:
                     repeat_skips += 1
@@ -625,6 +703,8 @@ def run_fuzzer(seeds: list, num_mutations: int, quiet: bool,
 
             summary = summarize_repeats(repeat_results, repeat_count, repeat_skips)
             result = next((r for r in repeat_results if r.is_discrepancy), repeat_results[0])
+
+            _trace_execution(trace_log, seed_idx, mut_idx, label, result)
 
             if result.is_discrepancy:
                 found += 1
@@ -763,7 +843,7 @@ def run_fuzzer_response(resp_seeds: list, num_mutations: int, quiet: bool,
 # ── Entry Point ───────────────────────────────────────────────────────────────
 
 def main():
-    global PROXY_PORT, BACKEND_PORT
+    global PROXY_PORT, BACKEND_PORT, REPORTS_DIR
 
     parser = argparse.ArgumentParser(
         description="HTTP Desync Differential Fuzzer (HDHunter-inspired)")
@@ -794,7 +874,27 @@ def main():
                         help="Response seed directory (used when --mode response)")
     parser.add_argument("--wire-tap-log", default="",
                         help="Path to wire_tap.py JSON log; if set, recent entries are attached to reports")
+    parser.add_argument("--witcher", action="store_true",
+                        help="Paper-faithful mode: bring up the Witcher backend (gunicorn under "
+                             "patched CPython), create SysV shm, and read real per-request coverage "
+                             "(bitmap+fingerprint) + HttpParam 7-tuple (count_real/consumed_real) out-of-band.")
+    _ng = os.path.join(ROOT, "02_targets", "nginx_gunicorn")
+    parser.add_argument("--witcher-compose-base", default=os.path.join(_ng, "docker-compose.yml"),
+                        help="Base compose file for --witcher")
+    parser.add_argument("--witcher-compose-override", default=os.path.join(_ng, "docker-compose.witcher.yml"),
+                        help="Witcher override compose file for --witcher")
+    parser.add_argument("--witcher-no-build", action="store_true",
+                        help="Skip --build when bringing up the Witcher backend")
+    parser.add_argument("--reports-dir", default="",
+                        help="Override directory for discrepancy reports (e.g. crash_reports_cov_<id>)")
+    parser.add_argument("--trace-log", default="",
+                        help="Append one JSONL line per logical case (cov_fingerprint + real state) for B6/B8 analysis")
     args = parser.parse_args()
+
+    if args.reports_dir:
+        REPORTS_DIR = (args.reports_dir if os.path.isabs(args.reports_dir)
+                       else os.path.join(ROOT, "05_analyzer", args.reports_dir))
+        os.makedirs(REPORTS_DIR, exist_ok=True)
 
     PROXY_PORT   = args.proxy_port
     BACKEND_PORT = args.backend_port
@@ -826,6 +926,21 @@ def main():
                             restart_every=args.restart_every,
                             compose_file=args.compose_file,
                             wire_tap_log=args.wire_tap_log)
+    elif args.witcher:
+        from hdhunter_shm import WitcherBackend
+        if not health_probe(timeout=1.0):
+            logger.info("[*] Witcher mode: bringing up backend under patched CPython ...")
+        with WitcherBackend(args.witcher_compose_base, args.witcher_compose_override,
+                            build=not args.witcher_no_build, logger=logger.info) as shm:
+            if not health_probe(timeout=30.0):
+                logger.error("[!] Witcher backend did not become healthy")
+                sys.exit(1)
+            logger.info("[*] Witcher backend healthy — coverage + HttpParam shm live")
+            run_fuzzer(seeds, args.mutations, args.quiet, args.label, args.repeat,
+                       restart_every=args.restart_every,
+                       compose_file=args.compose_file,
+                       wire_tap_log=args.wire_tap_log, shm=shm,
+                       trace_log=args.trace_log)
     else:
         run_fuzzer(seeds, args.mutations, args.quiet, args.label, args.repeat,
                    restart_every=args.restart_every,

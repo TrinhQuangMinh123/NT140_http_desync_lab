@@ -1,0 +1,12 @@
+# Per-session injected shm ids for the haproxy_flask faithful pipeline.
+#
+# Bare-key passthrough: each var is forwarded ONLY when set in the host env (the runner
+# sets them after creating the SysV segments), and left UNSET otherwise. It must stay
+# unset rather than "" — Witcher treats a set-but-empty value as shm id 0, does shmat(0),
+# and segfaults on the first traced edge.
+services:
+  backend:
+    environment:
+      - __AFL_SHM
+      - __EXECUTION_PATH
+      - __HTTP_PARAM

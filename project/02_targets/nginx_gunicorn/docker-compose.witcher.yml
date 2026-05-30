@@ -1,0 +1,33 @@
+# B2 override — backend runs gunicorn under the Witcher-python interpreter.
+#
+# Usage (the runner will create the SysV shm and export the ids first; see B3/B4):
+#   __AFL_SHM=<id> __EXECUTION_PATH=<id> __HTTP_PARAM=<id> \
+#     docker compose -f docker-compose.yml -f docker-compose.witcher.yml up --build
+#
+# Standalone (no fuzzer): just `... up --build` — coverage detaches, hdhunter is no-op.
+#
+# ipc: host is REQUIRED: Witcher's coverage bitmap and our HttpParam state both live in
+# SysV shm created by the host-side runner; the container must share the host IPC
+# namespace to attach the same shm ids.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.witcher
+    ipc: host
+    volumes:
+      # prebuilt patched CPython 3.7.9 (read-only); container runs /witcher/python
+      - /home/m321/doAn/AnToanMang/vendors/Witcher-python:/witcher:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/vendor_py
+      - HDHUNTER_MODE=request
+      - HDHUNTER_WITCHER_PYTHON_FILTER_PATH=/app/witcher_filter.txt
+      # Injected per fuzz session by the runner (B3/B4). Bare-key passthrough:
+      # passed through ONLY when set in the host env, left UNSET otherwise.
+      # (Must stay unset rather than "" — Witcher treats a set-but-empty value as
+      #  a shm id of 0, does shmat(0), and segfaults on the first traced edge.)
+      - __AFL_SHM
+      - __EXECUTION_PATH
+      - __HTTP_PARAM

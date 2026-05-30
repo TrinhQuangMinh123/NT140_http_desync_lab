@@ -34,6 +34,16 @@ except Exception:
 _SEEN_LINES = set()  # process-wide accumulator
 _REQ_COUNTER = 0
 
+# ── HDHunter internal-state shim (B4b) ───────────────────────────────────────
+# Attach to the runner-provided SysV HttpParam shm (env __HTTP_PARAM). On the
+# coverage.py baseline image hdhunter.py is not present / __HTTP_PARAM is unset,
+# so this degrades to a no-op.
+try:
+    import hdhunter as _hdh
+    _hdh.hdhunter_init()
+except Exception:
+    _hdh = None
+
 
 def _snapshot_coverage():
     """Return the set of (file, line) tuples touched so far."""
@@ -72,6 +82,10 @@ def application(environ, start_response):
             state["wsgi_eof"] = (extra == b"")
         except Exception:
             state["wsgi_eof"] = True
+
+        # Body fully consumed -> this message is processed (paper Count rollover).
+        if _hdh is not None:
+            _hdh.hdhunter_mark_message_processed(_hdh.MODE_REQUEST)
     except Exception as e:
         state["body_content"] = ""
         state["body_length"]  = 0

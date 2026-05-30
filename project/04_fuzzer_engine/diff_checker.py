@@ -92,6 +92,21 @@ class StateTuple:
     cov_new_edges: Optional[int] = None
     cov_total_edges: Optional[int] = None
 
+    # ── B3/B4b: paper-faithful instrumentation (out-of-band, Witcher backend) ──
+    # cov_fingerprint = sha256 of the sorted bitmap buckets THIS request touched
+    #   (D2/R9) — the B8 blind-spot probe ("different state, same coverage?").
+    # count_real / consumed_real / content_length_real / chunked_real come from
+    #   the real HttpParam shm written by the patched gunicorn parser — they
+    #   REPLACE the wire-derived guesses for rule-1/rule-7 false-positive audit.
+    # state_source marks where the tuple came from: "httpparam-shm" (real) vs
+    #   "wire-derived" (the legacy observed-response estimate).
+    cov_fingerprint: Optional[str] = None
+    count_real: Optional[int] = None
+    consumed_real: Optional[list] = None
+    content_length_real: Optional[list] = None
+    chunked_real: Optional[list] = None
+    state_source: str = "wire-derived"
+
     # Extra context (not in HDHunter, but useful for reporting)
     timed_out: bool = False
     # True if the socket reported timeout *after* receiving some bytes but

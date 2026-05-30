@@ -1,0 +1,51 @@
+# Faithful Witcher base for the ATS environment (B7 — third faithful env).
+#
+# IMPORTANT — backend swap vs result.md: result.md's "ATS -> gevent" cannot be made
+# faithful. gevent's HTTP server is built on C extensions (greenlet, libev, c-ares) that
+# would have to be compiled against the custom Witcher CPython 3.7.9 — which ships a
+# non-standard ABI (empty abiflags, no pymalloc) and no working `ssl`/pip-over-HTTPS.
+# That is the same class of blocker as Tomcat (non-pure-Python backend).
+#
+# So here ATS proxies to the SAME gunicorn-under-Witcher backend as nginx/haproxy. This
+# turns the env into "ATS -> gunicorn", which isolates the PROXY variable (ATS vs nginx
+# vs haproxy) under a fully instrumented backend, at the cost of no longer matching
+# result.md's gevent backend. ATS remap already targets `backend:9002`, so gunicorn binds
+# 9002 here and the proxy config is unchanged.
+#
+#   python3 04_fuzzer_engine/runner.py --witcher \
+#     --witcher-compose-base     02_targets/ats_gevent/docker-compose.witcher.yml \
+#     --witcher-compose-override 02_targets/ats_gevent/docker-compose.witcher.override.yml \
+#     --proxy-port 8889 --backend-port 9002 ...
+
+services:
+  proxy:
+    build: proxy/
+    volumes:
+      - ./ats_records.config:/etc/trafficserver/records.config:ro
+      - ./ats_remap.config:/etc/trafficserver/remap.config:ro
+    ports:
+      - "8889:8889"
+    depends_on:
+      - backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  backend:
+    build:
+      context: ../nginx_gunicorn/backend
+      dockerfile: Dockerfile.witcher
+    ipc: host
+    volumes:
+      - /home/m321/doAn/AnToanMang/vendors/Witcher-python:/witcher:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/vendor_py
+      - HDHUNTER_MODE=request
+      - HDHUNTER_WITCHER_PYTHON_FILTER_PATH=/app/witcher_filter.txt
+    ports:
+      - "9002:9002"
+    command: ["/witcher/python", "-m", "gunicorn",
+              "--bind", "0.0.0.0:9002",
+              "--workers", "1", "--threads", "1", "--preload",
+              "--timeout", "10", "--log-level", "debug",
+              "app:application"]

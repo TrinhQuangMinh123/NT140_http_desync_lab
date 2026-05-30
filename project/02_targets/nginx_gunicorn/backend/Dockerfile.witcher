@@ -1,0 +1,37 @@
+# B2 — gunicorn running under the Witcher-python interpreter (coverage = paper-faithful).
+#
+# The patched CPython 3.7.9 (vendors/Witcher-python) writes an AFL edge bitmap to a
+# SysV shm whose id is passed via env __AFL_SHM (see Python/ceval.c). We do NOT bake
+# the interpreter into the image — it is bind-mounted at /witcher by the compose
+# override, because (a) the prebuilt binary needs only libc/libm which ubuntu:22.04
+# (glibc 2.35) already provides and matches the host build, and (b) copying the full
+# Witcher source tree into the build context would be huge.
+#
+# gunicorn is vendored as pure-python wheels under ./vendor_py (Witcher has no working
+# `ssl`/pip-over-HTTPS), together with a minimal `ssl.py` stub. PYTHONPATH points there.
+#
+# Coverage/internal-state env (__AFL_SHM, __EXECUTION_PATH, __HTTP_PARAM) are injected
+# by the fuzzer runner at fuzz time (B3/B4); absent them the backend boots fine with
+# coverage detached and hdhunter in no-op mode.
+FROM ubuntu:22.04
+
+WORKDIR /app
+
+# vendored gunicorn wheels (unpacked) + ssl stub + the WSGI app + hdhunter shim
+COPY vendor_py/ /app/vendor_py/
+COPY app.py hdhunter.py witcher_filter.txt /app/
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/vendor_py \
+    HDHUNTER_MODE=request \
+    HDHUNTER_WITCHER_PYTHON_FILTER_PATH=/app/witcher_filter.txt
+
+EXPOSE 9001
+
+# --workers 1 --threads 1 --preload  => single deterministic interpreter (R4).
+# /witcher/python is the bind-mounted patched interpreter.
+CMD ["/witcher/python", "-m", "gunicorn", \
+     "--bind", "0.0.0.0:9001", \
+     "--workers", "1", "--threads", "1", "--preload", \
+     "--timeout", "10", "--log-level", "debug", \
+     "app:application"]

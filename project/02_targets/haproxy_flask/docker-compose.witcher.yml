@@ -1,0 +1,52 @@
+# Faithful Witcher base for haproxy_flask (B7 — second gunicorn env).
+#
+# The backend here is the SAME gunicorn WSGI app as nginx_gunicorn (both result.md
+# "flask"/"gunicorn" envs are really gunicorn). We reuse the nginx_gunicorn witcher
+# build context verbatim — patched gunicorn parser + hdhunter.py + vendor_py + ssl stub
+# — and only change what differs: the proxy is HAProxy (not nginx) and gunicorn binds
+# 9003 (haproxy.cfg routes `backend gunicorn -> backend:9003`).
+#
+# Two-file contract (mirrors nginx): this BASE carries the witcher build + ipc:host +
+# /witcher bind-mount + static env; the .override.yml carries the per-session injected
+# shm ids (bare-key passthrough). The runner brings both up via WitcherBackend.
+#
+#   python3 04_fuzzer_engine/runner.py --witcher \
+#     --witcher-compose-base     02_targets/haproxy_flask/docker-compose.witcher.yml \
+#     --witcher-compose-override 02_targets/haproxy_flask/docker-compose.witcher.override.yml \
+#     --proxy-port 8890 --backend-port 9003 ...
+
+services:
+  proxy:
+    image: haproxy:2.9
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "8890:8890"
+    depends_on:
+      - backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  backend:
+    build:
+      # Reuse nginx_gunicorn's witcher backend verbatim (patched gunicorn + hdhunter
+      # shim + vendored wheels + ssl stub). Context path is relative to THIS file.
+      context: ../nginx_gunicorn/backend
+      dockerfile: Dockerfile.witcher
+    ipc: host
+    volumes:
+      # prebuilt patched CPython 3.7.9 (read-only); container runs /witcher/python
+      - /home/m321/doAn/AnToanMang/vendors/Witcher-python:/witcher:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/vendor_py
+      - HDHUNTER_MODE=request
+      - HDHUNTER_WITCHER_PYTHON_FILTER_PATH=/app/witcher_filter.txt
+    ports:
+      - "9003:9003"
+    # Override the image CMD to bind 9003 (haproxy upstream) instead of 9001.
+    command: ["/witcher/python", "-m", "gunicorn",
+              "--bind", "0.0.0.0:9003",
+              "--workers", "1", "--threads", "1", "--preload",
+              "--timeout", "10", "--log-level", "debug",
+              "app:application"]
