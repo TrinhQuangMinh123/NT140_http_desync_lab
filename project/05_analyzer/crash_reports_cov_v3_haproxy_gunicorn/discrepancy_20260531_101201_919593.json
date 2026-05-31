@@ -1,0 +1,107 @@
+{
+  "target": "",
+  "timestamp": "20260531_101201_919593",
+  "seed_index": 4,
+  "mutation_index": 25,
+  "mutation_label": "message:field_line_duplicate",
+  "payload_sha256": "38dc09dfdeeb83da7092776da6e4689809a0af6c9c5cfa44c657c91b470b8258",
+  "confidence": "high",
+  "diff_notes": [],
+  "triggered_rules": [
+    {
+      "rule": 7,
+      "field": "raw_response_length",
+      "proxy": 624,
+      "direct": 633,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": null,
+    "wsgi_body_length": 0,
+    "raw_response_length": 624,
+    "response_order": [
+      "6f06ccf3a76f4fe398e01a2da1fff160"
+    ],
+    "body_hash": "e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2731,
+    "cov_fingerprint": "2b3f405abdedca9db1ff5b2e954f3f46dd6f1071100003aceeb1e65d0824c5ca",
+    "count_real": 1,
+    "consumed_real": [
+      -1
+    ],
+    "content_length_real": [
+      -1
+    ],
+    "chunked_real": [
+      false
+    ],
+    "body_length_real": [
+      -1
+    ],
+    "status_real": [
+      0
+    ],
+    "order_real": [
+      0
+    ],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "direct_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": null,
+    "wsgi_body_length": 0,
+    "raw_response_length": 633,
+    "response_order": [
+      "6f06ccf3a76f4fe398e01a2da1fff160"
+    ],
+    "body_hash": "e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2731,
+    "cov_fingerprint": "c168a9affac8c72f6d5d12bc3d29ed5bd50e17c1ced7c1097745ae0d0929485b",
+    "count_real": 1,
+    "consumed_real": [
+      -1
+    ],
+    "content_length_real": [
+      -1
+    ],
+    "chunked_real": [
+      false
+    ],
+    "body_length_real": [
+      -1
+    ],
+    "status_real": [
+      0
+    ],
+    "order_real": [
+      0
+    ],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "repeat_analysis": {
+    "repeat_attempts": 1,
+    "completed_repeats": 1,
+    "skipped_repeats": 0,
+    "discrepancy_runs": 1,
+    "stable_discrepancy": true,
+    "unique_rule_sets": [
+      [
+        7
+      ]
+    ]
+  }
+}

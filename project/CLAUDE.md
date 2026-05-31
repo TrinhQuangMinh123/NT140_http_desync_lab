@@ -65,12 +65,15 @@ Pipeline 5 stage đánh số. **Luồng request-side faithful** (chế độ ch�
     `status`/`order` KHÔNG được parser request-side ghi (luôn 0) — surface verbatim, không giả tín hiệu.
   - `diff_checker.StateTuple` + `runner` wiring (vals/save_report/trace) + `analyze_witcher_full.py`
     (khóa B8 +`body`; **phân loại structural vs numeric**, hàm `classify_blind`).
-- **⏳ ĐANG CHẠY (nền):** `05_analyzer/run_witcher_v3.sh` — 3 env × 8 seed (1337–1344) × mut=50 ≈ **14,688 case**
-  → `trace_full_v3_*` / `crash_reports_cov_v3_*` (KHÔNG đụng v2). Log: `05_analyzer/run_v3.log`. ~1.5–2h.
-- **➡️ VIỆC TIẾP (task #7):** run xong → `python3 05_analyzer/analyze_witcher_full.py 05_analyzer` lọc file v3
-  → đọc cột **B8 structural vs numeric**. **Quy tắc quyết định (đã chốt trước):**
-  structural > 0 quy mô lớn → luận điểm LLM **per-pair** đứng → thiết kế Phase 2 quanh chúng;
-  vẫn 0 → kết luận trung thực dictionary đủ, vai trò LLM pivot sang triage/verify (Trục 1b IDEA doc).
+- **✅ v3 XONG (14,614 case, 3 env × 8 seed × mut=50). Báo cáo: `docs/resultv3.md`.** Số chốt:
+  hit 57.9% (≈v2 56.1% → profile lõi giữ), B6 thứ tự NGINX 65.9% > HAProxy 42% > ATS 41% (như v2).
+  **B8: 51 blind group, trong đó 36 STRUCTURAL** (v2=0), tái lập **cả 3 proxy** (cùng fp `fe1db789b1`,
+  `b8cf7df07d`), một fp gánh tới **20 parse-state**. ⇒ **điều kiện tiên quyết Phase 2 ĐẠT**: điểm mù
+  vượt-number-format là thật & lớn.
+- **➡️ VIỆC TIẾP (Phase 2):** thiết kế **ablation 3 nhánh** (coverage-only · +static-dictionary · +LLM) —
+  caveat đã chốt: 36 structural đều là biến thể **framing chunk**, một dictionary chunk-framing vẫn chạm được;
+  luận điểm *đích thực LLM-shaped* = phân kỳ **đặc thù theo cặp proxy×backend**. B8 chỉ chứng minh điểm mù
+  lớn, CHƯA chứng minh "LLM > dictionary" — đó là việc của ablation.
 - **Ablation Phase 2 phải 3 nhánh** (không phải 2): coverage-only · +static-dictionary · +LLM — nếu không,
   win của LLM không falsifiable (xem lập luận đã chốt trong phiên, memory `phase1-done-phase2-llm-plan`).
 

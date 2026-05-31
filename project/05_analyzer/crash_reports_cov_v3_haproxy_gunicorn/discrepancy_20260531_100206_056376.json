@@ -1,0 +1,145 @@
+{
+  "target": "",
+  "timestamp": "20260531_100206_056376",
+  "seed_index": 10,
+  "mutation_index": 50,
+  "mutation_label": "message:field_line_duplicate",
+  "payload_sha256": "efc29d97391ca3c21cb84e3d9454850bc09d36058c717151e5a34bfa320d4599",
+  "confidence": "high",
+  "diff_notes": [],
+  "triggered_rules": [
+    {
+      "rule": 1,
+      "field": "observed_response_count",
+      "proxy": 2,
+      "direct": 1,
+      "note": "Pipeline desync candidate: paths emitted a different number of HTTP responses on the wire"
+    },
+    {
+      "rule": 2,
+      "field": "observed_messages_parsed",
+      "proxy": 2,
+      "direct": 1,
+      "note": "One path produced more fully-parseable responses than the other"
+    },
+    {
+      "rule": 8,
+      "field": "order",
+      "proxy": [
+        "00ae91faae8349459953eedc2c7ef572",
+        "9ff7e6abf31c493685f1c21fdee1fe77"
+      ],
+      "direct": [
+        "00ae91faae8349459953eedc2c7ef572"
+      ],
+      "note": "Response order (X-Desync-Id sequence) differs \u2014 Response Stealing candidate"
+    },
+    {
+      "rule": 9,
+      "field": "body_hash",
+      "proxy": "e3b0c44298fc1c14e3b0c44298fc1c14",
+      "direct": "e3b0c44298fc1c14",
+      "note": "Backend consumed same length but different content \u2014 TE.CL offset candidate"
+    },
+    {
+      "rule": 7,
+      "field": "raw_response_length",
+      "proxy": 1234,
+      "direct": 634,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "observed_response_count": 2,
+    "observed_messages_parsed": 2,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": null,
+    "wsgi_body_length": 0,
+    "raw_response_length": 1234,
+    "response_order": [
+      "00ae91faae8349459953eedc2c7ef572",
+      "9ff7e6abf31c493685f1c21fdee1fe77"
+    ],
+    "body_hash": "e3b0c44298fc1c14e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2692,
+    "cov_fingerprint": "2b3f405abdedca9db1ff5b2e954f3f46dd6f1071100003aceeb1e65d0824c5ca",
+    "count_real": 1,
+    "consumed_real": [
+      -1
+    ],
+    "content_length_real": [
+      -1
+    ],
+    "chunked_real": [
+      false
+    ],
+    "body_length_real": [
+      -1
+    ],
+    "status_real": [
+      0
+    ],
+    "order_real": [
+      0
+    ],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "direct_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": null,
+    "wsgi_body_length": 0,
+    "raw_response_length": 634,
+    "response_order": [
+      "00ae91faae8349459953eedc2c7ef572"
+    ],
+    "body_hash": "e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2692,
+    "cov_fingerprint": "c168a9affac8c72f6d5d12bc3d29ed5bd50e17c1ced7c1097745ae0d0929485b",
+    "count_real": 1,
+    "consumed_real": [
+      -1
+    ],
+    "content_length_real": [
+      -1
+    ],
+    "chunked_real": [
+      false
+    ],
+    "body_length_real": [
+      -1
+    ],
+    "status_real": [
+      0
+    ],
+    "order_real": [
+      0
+    ],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "repeat_analysis": {
+    "repeat_attempts": 1,
+    "completed_repeats": 1,
+    "skipped_repeats": 0,
+    "discrepancy_runs": 1,
+    "stable_discrepancy": true,
+    "unique_rule_sets": [
+      [
+        1,
+        2,
+        7,
+        8,
+        9
+      ]
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+POST / HTTP/1.1
+Host: localhost
+Content-Length: 6
+Transfer-Encoding: chunked
+X-Desync-Id: d7c0cd51241043e09879eddc107a1e11
+
+0
+
+XPOST / HTTP/1.1
+Host: localhost
+Content-Length: 6
+Transfer-Encoding: chunked
+X-Desync-Id: e45f853fca6949c6aed9bdbe8d066f98
+
+0
+
+X

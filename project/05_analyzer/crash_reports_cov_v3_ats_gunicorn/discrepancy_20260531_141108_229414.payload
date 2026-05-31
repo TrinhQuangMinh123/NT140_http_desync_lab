@@ -1,0 +1,10 @@
+GET / HTTP/1.1
+Host: localholication/x-www-form-urlencoded
+Content-Length: 11
+
+st
+
+GET /second HTTP/1.1
+Host: localhost
+Connection: close
+

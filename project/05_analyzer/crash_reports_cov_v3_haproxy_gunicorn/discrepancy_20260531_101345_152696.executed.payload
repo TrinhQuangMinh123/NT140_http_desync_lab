@@ -1,0 +1,16 @@
+POST / HTTP/1.1
+Host: localhost
+Content-Length: 3
+Transfer-Encoding: chunked
+X-Desync-Id: c070cd11269c45aab0e5d8ad406dc829
+
+5
+12345
+0
+
+GET / HTTP/1.1
+Host: lochost
+Calhost
+Connection: close
+X-Desync-Id: c984568e37e14fe58d684264c183dc66
+

@@ -1,0 +1,115 @@
+{
+  "target": "",
+  "timestamp": "20260531_103026_216825",
+  "seed_index": 6,
+  "mutation_index": 43,
+  "mutation_label": "message:field_line_splice",
+  "payload_sha256": "602fb4c0dd1f5a7626afeda0646a47f36b8791771b49a485b5aab654b0d8e22d",
+  "confidence": "high",
+  "diff_notes": [],
+  "triggered_rules": [
+    {
+      "rule": 5,
+      "field": "wsgi_content_length",
+      "proxy": -1,
+      "direct": 6,
+      "note": "Content-Length handling differs between the two paths"
+    },
+    {
+      "rule": 7,
+      "field": "raw_response_length",
+      "proxy": 630,
+      "direct": 638,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": true,
+    "wsgi_body_length": 0,
+    "raw_response_length": 630,
+    "response_order": [
+      "b183c16d18f74a72bf2692b48248205a"
+    ],
+    "body_hash": "e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2700,
+    "cov_fingerprint": "758d1650f356180d7c010f0b78b23e6c9bd462528009f883d1b63015a64a35bf",
+    "count_real": 1,
+    "consumed_real": [
+      5
+    ],
+    "content_length_real": [
+      -1
+    ],
+    "chunked_real": [
+      true
+    ],
+    "body_length_real": [
+      -1
+    ],
+    "status_real": [
+      0
+    ],
+    "order_real": [
+      0
+    ],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "direct_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": 6,
+    "wsgi_transfer_encoding": true,
+    "wsgi_body_length": 0,
+    "raw_response_length": 638,
+    "response_order": [
+      "b183c16d18f74a72bf2692b48248205a"
+    ],
+    "body_hash": "e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2700,
+    "cov_fingerprint": "b7db52935100b31bc20f3b2bad7ba52f425580efca458f5b534d81bfc8580df3",
+    "count_real": 1,
+    "consumed_real": [
+      5
+    ],
+    "content_length_real": [
+      -1
+    ],
+    "chunked_real": [
+      true
+    ],
+    "body_length_real": [
+      -1
+    ],
+    "status_real": [
+      0
+    ],
+    "order_real": [
+      0
+    ],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "repeat_analysis": {
+    "repeat_attempts": 1,
+    "completed_repeats": 1,
+    "skipped_repeats": 0,
+    "discrepancy_runs": 1,
+    "stable_discrepancy": true,
+    "unique_rule_sets": [
+      [
+        5,
+        7
+      ]
+    ]
+  }
+}

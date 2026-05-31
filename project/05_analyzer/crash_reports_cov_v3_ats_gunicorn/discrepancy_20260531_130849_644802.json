@@ -1,0 +1,111 @@
+{
+  "target": "",
+  "timestamp": "20260531_130849_644802",
+  "seed_index": 4,
+  "mutation_index": 24,
+  "mutation_label": "byte:splice",
+  "payload_sha256": "6a5214972b8b456dd1f335966521c311fca9770ec8e5f35a1e34e7c28ada3a67",
+  "confidence": "high",
+  "diff_notes": [],
+  "triggered_rules": [
+    {
+      "rule": 3,
+      "field": "status",
+      "proxy": 200,
+      "direct": 400,
+      "note": "Proxy and backend returned different HTTP status codes"
+    },
+    {
+      "rule": 8,
+      "field": "order",
+      "proxy": [
+        "166fec72ef05476aaad65c1cc17f9106"
+      ],
+      "direct": [],
+      "note": "Response order (X-Desync-Id sequence) differs \u2014 Response Stealing candidate"
+    },
+    {
+      "rule": 7,
+      "field": "raw_response_length",
+      "proxy": 636,
+      "direct": 251,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": null,
+    "wsgi_body_length": 0,
+    "raw_response_length": 636,
+    "response_order": [
+      "166fec72ef05476aaad65c1cc17f9106"
+    ],
+    "body_hash": "e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2675,
+    "cov_fingerprint": "2b3f405abdedca9db1ff5b2e954f3f46dd6f1071100003aceeb1e65d0824c5ca",
+    "count_real": 1,
+    "consumed_real": [
+      -1
+    ],
+    "content_length_real": [
+      -1
+    ],
+    "chunked_real": [
+      false
+    ],
+    "body_length_real": [
+      -1
+    ],
+    "status_real": [
+      0
+    ],
+    "order_real": [
+      0
+    ],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "direct_state": {
+    "status": 400,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": null,
+    "wsgi_body_length": 0,
+    "raw_response_length": 251,
+    "response_order": [],
+    "body_hash": "",
+    "wsgi_eof": null,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2675,
+    "cov_fingerprint": "b581401bc7aca99db007d15668f276beccef00e6be130276f772f08f94b3117d",
+    "count_real": 0,
+    "consumed_real": [],
+    "content_length_real": [],
+    "chunked_real": [],
+    "body_length_real": [],
+    "status_real": [],
+    "order_real": [],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "repeat_analysis": {
+    "repeat_attempts": 1,
+    "completed_repeats": 1,
+    "skipped_repeats": 0,
+    "discrepancy_runs": 1,
+    "stable_discrepancy": true,
+    "unique_rule_sets": [
+      [
+        3,
+        7,
+        8
+      ]
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+POST / HTTP/1.1
+Host: localhost
+Content-Length: 3
+Transfer-Encoding: chunked
+X-Desync-Id: e6bd19d48cd1480ca41fd2b92afb1b6a
+
+5
+12345
+0
+
+POST / HTTP/1.1
+Host: 11
+Content-Type: application/x-www-form-urlencoded
+Content-Length: localhost
+X-Desync-Id: a7884ab71e7f448a870e7b67794b7e9f
+
+hello=world

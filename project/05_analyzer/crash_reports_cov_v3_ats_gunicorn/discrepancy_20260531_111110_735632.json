@@ -1,0 +1,85 @@
+{
+  "target": "",
+  "timestamp": "20260531_111110_735632",
+  "seed_index": 7,
+  "mutation_index": 21,
+  "mutation_label": "message:trailer_section_replace",
+  "payload_sha256": "a9ff7e281c646f6d92ead03d166888c6b113979790eea95cb57eaef1225ee88b",
+  "confidence": "low",
+  "diff_notes": [
+    "partial_timeout=True on at least one side \u2014 raw_response_length (Rule 7) suppressed, treat remaining signals as needing replay confirmation"
+  ],
+  "triggered_rules": [
+    {
+      "rule": 5,
+      "field": "wsgi_content_length",
+      "proxy": -1,
+      "direct": 3,
+      "note": "Content-Length handling differs between the two paths"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": true,
+    "wsgi_body_length": 0,
+    "raw_response_length": 698,
+    "response_order": [
+      "bdb9cad7124e46c9af53a097b2cda4c0"
+    ],
+    "body_hash": "",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2710,
+    "cov_fingerprint": "117ac37bbcb3f60c66d3a86a207bdeb5cc3defff5713afe6a0d797f504c64b5b",
+    "count_real": 0,
+    "consumed_real": [],
+    "content_length_real": [],
+    "chunked_real": [],
+    "body_length_real": [],
+    "status_real": [],
+    "order_real": [],
+    "state_source": "httpparam-shm",
+    "partial_timeout": true
+  },
+  "direct_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": 3,
+    "wsgi_transfer_encoding": true,
+    "wsgi_body_length": 0,
+    "raw_response_length": 678,
+    "response_order": [
+      "bdb9cad7124e46c9af53a097b2cda4c0"
+    ],
+    "body_hash": "",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2710,
+    "cov_fingerprint": "fe08ca504aceef3a53edf36c192ecca7f36751375b9514fc6479ef7b96f0f2e5",
+    "count_real": 0,
+    "consumed_real": [],
+    "content_length_real": [],
+    "chunked_real": [],
+    "body_length_real": [],
+    "status_real": [],
+    "order_real": [],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "repeat_analysis": {
+    "repeat_attempts": 1,
+    "completed_repeats": 1,
+    "skipped_repeats": 0,
+    "discrepancy_runs": 1,
+    "stable_discrepancy": true,
+    "unique_rule_sets": [
+      [
+        5
+      ]
+    ]
+  }
+}

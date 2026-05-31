@@ -1,0 +1,12 @@
+GET / HTTP/1.1
+X-Desync-Id: b2400e06cae94ae796a4d7de4b997f07
+
+POST / HTTP/1.1
+Host: localhost
+Transfer-Encoding: chunked
+X-Desync-Id: 9f8399c7655246daab91021c9378d69a
+
+b
+hello=world
+0
+

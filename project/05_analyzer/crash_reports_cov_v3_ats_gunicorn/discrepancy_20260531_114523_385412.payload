@@ -1,0 +1,20 @@
+GET / HTTP/1.1
+Host: localhost
+
+GET /second HTTP/1.1
+Host: localhost
+Connection: close
+
+POST / HTTP/1.1
+Host: localhost
+Transfer-EncodinHTTP/1.1
+Host: localhost
+Transfer-Encoding: chunked
+Trailer: X-Secret
+
+5g: chunked
+
+b
+hello=world
+0
+

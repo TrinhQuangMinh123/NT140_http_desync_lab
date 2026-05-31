@@ -1,0 +1,12 @@
+POST / HTTP/1.1
+Host: localhost
+Transfer-Encoding: chunked
+
+5;ext=evil
+ABCDE
+0
+Host: localhost
+Content-Length: 3
+Transfeurlencoded
+Cr-Encoding: chunked
+

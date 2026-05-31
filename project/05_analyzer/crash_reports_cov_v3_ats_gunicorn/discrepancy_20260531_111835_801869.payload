@@ -1,0 +1,10 @@
+POST / ;HTTP/1.1
+Host: localhost
+Transfer-Encoding: chunked
+Trailer: X-Secret
+
+5
+ABCDE
+0
+X-Secret: leaked
+

@@ -1,0 +1,16 @@
+POST / HTTP/1.1
+Host: localhost
+Content-Length: 00011
+X-Desync-Id: 0d098125c88041838b5547ff6ec1e0ef
+
+hello=worldPOST / HTTP/1.1
+Host: localhost
+Transfer-Encoding: chunked
+Trailer: X-Secret
+X-Desync-Id: afd522e66b214a308cc3f7d222758487
+
+5
+ABCDE
+0
+X-Secret: leaked
+

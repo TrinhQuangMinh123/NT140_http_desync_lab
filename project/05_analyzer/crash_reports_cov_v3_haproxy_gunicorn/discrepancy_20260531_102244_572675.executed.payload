@@ -1,0 +1,11 @@
+GET / HTTP/1.1
+Host: lHost: localhost
+Content-Length: 3
+Transfer-Encoding: chunked
+X-Desync-Id: 0b3887db386844bfb829419f2df3b25c
+
+5
+12345
+ocalhost
+Connection: close
+

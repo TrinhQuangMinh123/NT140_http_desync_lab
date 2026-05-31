@@ -1,0 +1,12 @@
+POST / HTTP/1.1
+Host: localhost
+Transfer-Encoding: chunked
+
+b
+hello=world
+0
+
+GET / HT‘TP/1.1
+Host: localhost
+Connection: close
+

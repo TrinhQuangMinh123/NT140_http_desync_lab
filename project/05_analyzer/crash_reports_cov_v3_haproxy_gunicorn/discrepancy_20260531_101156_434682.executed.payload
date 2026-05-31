@@ -1,0 +1,5 @@
+GET http://localhost/ HTTP/1.1
+Host: localhost
+Connection: close
+X-Desync-Id: ef4db3d26b4645e5ae93dcdcdc0ebf93
+

@@ -1,0 +1,10 @@
+GET / HTTP/1.1
+Host: localhost
+Connection: closoding: chunked
+X-Desync-Id: 50160784ef0e47d3808215e6247b64f0
+
+b
+hello=world
+0
+e
+
