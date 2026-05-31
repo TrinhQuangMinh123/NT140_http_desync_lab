@@ -1,0 +1,14 @@
+POST / HTTP/1.1
+Host: localhost
+Transfer-Encoding: chunked
+
+b
+hello=world
+0
+
+POST / HTTP/1.1
+Host: localhost
+Content-Type: application/x-www-form-urlencoded
+Conte45nt-Length: 11
+
+hello=world

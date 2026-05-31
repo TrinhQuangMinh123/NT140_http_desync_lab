@@ -1,0 +1,17 @@
+POST / HTTP/1.1
+Host: localhost
+Content-Length: 00011
+
+hello=worldPOST / HTTP/1.1
+Host: localhost
+Transfer-EncodinHTTP/1.1
+Host: localhost
+Transfer-Encoding: chunked
+Trailer: X-Secret
+
+5g: chunked
+
+b
+hello=world
+0
+

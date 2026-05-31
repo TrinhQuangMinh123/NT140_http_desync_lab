@@ -1,0 +1,5 @@
+GET / HTTP/1.1
+Host: chunked
+Connection: close
+X-Desync-Id: 7922a42710554d56afde2b0a8b5bd2bd
+

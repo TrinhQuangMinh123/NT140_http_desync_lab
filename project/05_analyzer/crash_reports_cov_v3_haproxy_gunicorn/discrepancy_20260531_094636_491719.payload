@@ -1,0 +1,16 @@
+GET / HTTP/1.1
+Host: localhost
+
+GET /second HTTP/1.1
+Host: localhost
+Connection: close
+
+
+
+
+POST / HTTP/1.1
+Host: localhost
+Content-Length: 11
+Content-Length: 5
+
+hello=world

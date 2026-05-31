@@ -1,0 +1,9 @@
+POS / HTTP/1.1
+Host: localhost
+Content-Length: 6
+Transfer-Encoding: chunked
+X-Desync-Id: 15f18bc0574241db910911954998ef24
+
+0
+
+X

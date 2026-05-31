@@ -1,0 +1,17 @@
+POST / HTTP/1.1
+Host: localhost
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 11
+X-Desync-Id: 10a5fb1a9cd5436daecb893e6d1e21e1
+
+hello=worldPOST / HTTP/1.1
+Host: localhost
+Transfer-Encoding: chunked
+Trailer: X-Secret
+X-Desync-Id: 296983f9f2e54bd785da7089b912920a
+
+5
+ABCDE
+0
+X-Secret: leaked
+

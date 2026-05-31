@@ -1,0 +1,115 @@
+{
+  "target": "",
+  "timestamp": "20260531_090425_526582",
+  "seed_index": 6,
+  "mutation_index": 31,
+  "mutation_label": "sequence:splice",
+  "payload_sha256": "1ecfda257217e8e526eff00499c101e8a372db7c9e044f9b7885b515ec9f0c9d",
+  "confidence": "high",
+  "diff_notes": [],
+  "triggered_rules": [
+    {
+      "rule": 5,
+      "field": "wsgi_content_length",
+      "proxy": -1,
+      "direct": 6,
+      "note": "Content-Length handling differs between the two paths"
+    },
+    {
+      "rule": 7,
+      "field": "raw_response_length",
+      "proxy": 630,
+      "direct": 628,
+      "note": "Raw response size differs; response-side candidate requires replay"
+    }
+  ],
+  "proxy_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": -1,
+    "wsgi_transfer_encoding": true,
+    "wsgi_body_length": 0,
+    "raw_response_length": 630,
+    "response_order": [
+      "a31b193866e84c9fa896cbab6c7499d8"
+    ],
+    "body_hash": "e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2659,
+    "cov_fingerprint": "758d1650f356180d7c010f0b78b23e6c9bd462528009f883d1b63015a64a35bf",
+    "count_real": 1,
+    "consumed_real": [
+      5
+    ],
+    "content_length_real": [
+      -1
+    ],
+    "chunked_real": [
+      true
+    ],
+    "body_length_real": [
+      -1
+    ],
+    "status_real": [
+      0
+    ],
+    "order_real": [
+      0
+    ],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "direct_state": {
+    "status": 200,
+    "observed_response_count": 1,
+    "observed_messages_parsed": 1,
+    "wsgi_content_length": 6,
+    "wsgi_transfer_encoding": true,
+    "wsgi_body_length": 0,
+    "raw_response_length": 628,
+    "response_order": [
+      "a31b193866e84c9fa896cbab6c7499d8"
+    ],
+    "body_hash": "e3b0c44298fc1c14",
+    "wsgi_eof": true,
+    "cov_new_edges": 0,
+    "cov_total_edges": 2659,
+    "cov_fingerprint": "815567026d61f835b4988e3b85312c04f161d00a46fa7f95a382354173b6a90e",
+    "count_real": 1,
+    "consumed_real": [
+      5
+    ],
+    "content_length_real": [
+      -1
+    ],
+    "chunked_real": [
+      true
+    ],
+    "body_length_real": [
+      -1
+    ],
+    "status_real": [
+      0
+    ],
+    "order_real": [
+      0
+    ],
+    "state_source": "httpparam-shm",
+    "partial_timeout": false
+  },
+  "repeat_analysis": {
+    "repeat_attempts": 1,
+    "completed_repeats": 1,
+    "skipped_repeats": 0,
+    "discrepancy_runs": 1,
+    "stable_discrepancy": true,
+    "unique_rule_sets": [
+      [
+        5,
+        7
+      ]
+    ]
+  }
+}

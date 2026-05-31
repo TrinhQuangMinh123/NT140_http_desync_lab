@@ -137,19 +137,36 @@ class WitcherShm:
         return new_edges, fingerprint, len(self.seen_edges), len(touched)
 
     def read_state(self):
-        """Return (count_real, consumed_real, content_length_real, chunked_real).
+        """Return the FULL HttpParam internal state as a dict (B4b v2).
 
         count_real = number of messages the parser fully framed. The rt rolls
         message_count forward on the first write of the NEXT message, so the
         in-flight (marked-but-not-rolled) message is message_processed.
+
+        body_length_real vs consumed_real: for chunked bodies these now DIFFER
+        — consumed includes the chunk framing bytes (size lines, CRLFs, trailer)
+        while body is decoded payload only. `consumed - body` = wire framing
+        overhead, a structural axis edge-coverage cannot see (B8).
+
+        status_real / order_real are part of the documented struct but are NOT
+        written by the request-side WSGI parser (status is a response concept;
+        order is a wire-observation captured by diff_checker). They are surfaced
+        here verbatim for completeness — expect all-zero on request-side.
         """
         p = self.param
         count_real = p.message_count + (1 if p.message_processed else 0)
         n = max(0, min(count_real, _N))
-        consumed_real = [p.consumed_length[i] for i in range(n)]
-        content_length_real = [p.content_length[i] for i in range(n)]
-        chunked_real = [bool(p.chunked_encoding[i]) for i in range(n)]
-        return count_real, consumed_real, content_length_real, chunked_real
+        return {
+            "count_real": count_real,
+            "consumed_real": [p.consumed_length[i] for i in range(n)],
+            "content_length_real": [p.content_length[i] for i in range(n)],
+            "chunked_real": [bool(p.chunked_encoding[i]) for i in range(n)],
+            "body_length_real": [p.body_length[i] for i in range(n)],
+            "status_real": [p.status[i] for i in range(n)],
+            "order_real": [p.order[i] for i in range(n)],
+            "message_count_raw": p.message_count,
+            "message_processed_raw": p.message_processed,
+        }
 
     def cleanup(self):
         for addr in (self.afl_addr, self.exec_addr, self.param_addr):

@@ -303,13 +303,13 @@ def execute_payload(payload: bytes, shm=None):
         time.sleep(0.02)  # let the backend finish writing the shm
         # snapshot proxy-side shm BEFORE the direct send overwrites it
         p_new, p_fp, p_tot, _ = shm.read_coverage()
-        p_cnt, p_cons, p_cl, p_chk = shm.read_state()
+        p_state = shm.read_state()
 
         shm.reset()
         direct_raw, direct_to, direct_partial = send_raw(BACKEND_HOST, BACKEND_PORT, tagged)
         time.sleep(0.02)
         d_new, d_fp, d_tot, _ = shm.read_coverage()
-        d_cnt, d_cons, d_cl, d_chk = shm.read_state()
+        d_state = shm.read_state()
     else:
         proxy_raw,  proxy_to,  proxy_partial  = send_raw(PROXY_HOST,   PROXY_PORT,   tagged)
         direct_raw, direct_to, direct_partial = send_raw(BACKEND_HOST, BACKEND_PORT, tagged)
@@ -323,13 +323,20 @@ def execute_payload(payload: bytes, shm=None):
     direct_state.partial_timeout = direct_partial
 
     if shm is not None:
-        for st, vals in (
-            (proxy_state,  (p_new, p_fp, p_tot, p_cnt, p_cons, p_cl, p_chk)),
-            (direct_state, (d_new, d_fp, d_tot, d_cnt, d_cons, d_cl, d_chk)),
+        for st, cov, state in (
+            (proxy_state,  (p_new, p_fp, p_tot), p_state),
+            (direct_state, (d_new, d_fp, d_tot), d_state),
         ):
-            (st.cov_new_edges, st.cov_fingerprint, st.cov_total_edges,
-             st.count_real, st.consumed_real,
-             st.content_length_real, st.chunked_real) = vals
+            st.cov_new_edges, st.cov_fingerprint, st.cov_total_edges = cov
+            st.count_real            = state["count_real"]
+            st.consumed_real         = state["consumed_real"]
+            st.content_length_real   = state["content_length_real"]
+            st.chunked_real          = state["chunked_real"]
+            st.body_length_real      = state["body_length_real"]
+            st.status_real           = state["status_real"]
+            st.order_real            = state["order_real"]
+            st.message_processed_raw = state["message_processed_raw"]
+            st.message_count_raw     = state["message_count_raw"]
             st.cov_fingerprint = st.cov_fingerprint or None
             st.state_source = "httpparam-shm"
 
@@ -414,6 +421,9 @@ def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int,
             "consumed_real":            result.proxy.consumed_real,
             "content_length_real":      result.proxy.content_length_real,
             "chunked_real":             result.proxy.chunked_real,
+            "body_length_real":         result.proxy.body_length_real,
+            "status_real":              result.proxy.status_real,
+            "order_real":               result.proxy.order_real,
             "state_source":             result.proxy.state_source,
             "partial_timeout":          result.proxy.partial_timeout,
         },
@@ -435,6 +445,9 @@ def save_report(payload: bytes, result, label: str, seed_idx: int, mut_idx: int,
             "consumed_real":            result.direct.consumed_real,
             "content_length_real":      result.direct.content_length_real,
             "chunked_real":             result.direct.chunked_real,
+            "body_length_real":         result.direct.body_length_real,
+            "status_real":              result.direct.status_real,
+            "order_real":               result.direct.order_real,
             "state_source":             result.direct.state_source,
             "partial_timeout":          result.direct.partial_timeout,
         },
@@ -621,6 +634,10 @@ def _trace_execution(trace_log: str, seed_idx: int, mut_idx: int, label: str, re
             "consumed_real": st.consumed_real,
             "content_length_real": st.content_length_real,
             "chunked_real": st.chunked_real,
+            # B4b v2 — full HttpParam capture for structural blind-spot analysis:
+            "body_length_real": st.body_length_real,
+            "status_real": st.status_real,
+            "order_real": st.order_real,
             # legacy wire-derived, for the B6 false-positive audit:
             "wire_count": st.message_count,
             "wire_consumed": st.consumed_length,

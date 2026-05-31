@@ -1,0 +1,5 @@
+GET http://localhost/ HTTP/1.1
+ontent-TyHost: localhost
+Connection: close
+X-Desync-Id: 668b9ffb5be64ea59a4d72b763c146e8
+

@@ -1,0 +1,9 @@
+POST / HTTP/1.1
+Host: localhost
+Transfer-Encoding: Set-Cookie
+X-Desync-Id: ef2220b1448c44f18c6c1639389e6092
+
+b
+hello=world
+0
+

@@ -1,0 +1,10 @@
+POST / HTTP/1.1
+Host: lo.1
+Hostcalhost
+Transfer-Encoding: chunked
+X-Desync-Id: 9b7ca2daed68455ab321160c8a58c9c8
+
+5;ext=evil
+ABCDE
+0
+

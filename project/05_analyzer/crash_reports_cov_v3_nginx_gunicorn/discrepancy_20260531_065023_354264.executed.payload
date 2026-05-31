@@ -1,0 +1,11 @@
+POST / HTTP/1.1
+Host: Max-Forwards
+Transfer-Encoding: chunked
+Trailer: X-Secret
+X-Desync-Id: 8bb30f3fbae1465ca387875d78b9204f
+
+5
+ABCDE
+0
+X-Secret: leaked
+

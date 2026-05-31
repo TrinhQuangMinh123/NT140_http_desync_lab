@@ -1,0 +1,7 @@
+GET / HTTP/1.1
+Host: Sec-CH-UA-Mobile
+
+GET /second HTTP/1.1
+Host: localhost
+Connection: close
+

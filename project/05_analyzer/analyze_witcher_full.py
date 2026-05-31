@@ -33,8 +33,43 @@ ENV_PRETTY = {
 
 
 def real_state(side):
-    return (side["count_real"], tuple(side["consumed_real"] or []),
-            tuple(side["chunked_real"] or []), tuple(side["content_length_real"] or []))
+    """Full HttpParam real-state key for B8 grouping. body_length_real (B4b v2)
+    is added so that 'same consumed but different framing' shows as a distinct
+    state. Falls back gracefully on old traces that lack the field."""
+    return (side["count_real"],
+            tuple(side["consumed_real"] or []),
+            tuple(side["chunked_real"] or []),
+            tuple(side["content_length_real"] or []),
+            tuple(side.get("body_length_real") or []))
+
+
+def classify_blind(states):
+    """Given the set of distinct real-states sharing ONE cov_fingerprint, decide
+    whether the divergence is STRUCTURAL (framing/shape — the LLM-shaped class
+    coverage truly can't reach) or NUMERIC-ONLY (a value a static dictionary of
+    number formats would also reach).
+
+    real_state = (count, consumed[], chunked[], CL[], body[]).
+    Structural if message COUNT varies, the chunked framing mode varies, OR the
+    per-message framing overhead (consumed - body) varies. Otherwise the groups
+    differ only in numeric magnitude (CL / consumed / body) -> numeric-only.
+    """
+    counts = {s[0] for s in states}
+    chunked = {s[2] for s in states}
+    if len(counts) > 1 or len(chunked) > 1:
+        return "structural"
+    # framing overhead per message = consumed[i] - body[i] (chunk framing bytes)
+    overheads = set()
+    for s in states:
+        cons, body = s[1], s[4]
+        ov = tuple((cons[i] if i < len(cons) else None)
+                   - (body[i] if i < len(body) else 0)
+                   if i < len(cons) and body and i < len(body) else None
+                   for i in range(max(len(cons), len(body))))
+        overheads.add(ov)
+    if len(overheads) > 1:
+        return "structural"
+    return "numeric"
 
 
 def load(trace_dir):
@@ -123,14 +158,22 @@ def main(trace_dir):
         by_fp = collections.defaultdict(set)
         for x in with_fp:
             by_fp[x["direct"]["cov_fingerprint"]].add(real_state(x["direct"]))
-        blind = [fp for fp, st in by_fp.items() if len(st) > 1]
+        blind = {fp: st for fp, st in by_fp.items() if len(st) > 1}
+        n_struct = sum(1 for st in blind.values() if classify_blind(st) == "structural")
+        n_num = len(blind) - n_struct
         brows.append([ENV_PRETTY.get(env, env), len(allrecs),
                       f"{len(with_fp)} ({100*len(with_fp)//max(len(allrecs),1)}%)",
                       len({x["direct"]["cov_fingerprint"] for x in with_fp}),
-                      len(disc), len(corrob), len(disc) - len(corrob), len(blind)])
+                      len(disc), len(corrob), len(disc) - len(corrob),
+                      len(blind), n_struct, n_num])
     print(md_table(["Env", "Cases", "cov present", "distinct fp",
-                    "Disc", "B6 corrob", "B6 resp-only", "B8 blind groups"], brows))
+                    "Disc", "B6 corrob", "B6 resp-only",
+                    "B8 blind", "B8 structural", "B8 numeric"], brows))
     print()
+    print("> **B8 structural** = same edge-set but message-count / chunked-mode / "
+          "framing-overhead (consumed-body) differs → coverage-blind AND beyond a "
+          "static number-format dictionary (LLM-shaped). **B8 numeric** = only a "
+          "CL/consumed/body magnitude differs (a dictionary would also reach it).\n")
 
     # ── B8 examples (combined) ────────────────────────────────────────────────
     print("## B8 examples — same coverage fingerprint, different REAL parse state\n")
@@ -141,10 +184,12 @@ def main(trace_dir):
         for x in allrecs:
             by_fp[x["direct"]["cov_fingerprint"]].add(real_state(x["direct"]))
         for fp, st in by_fp.items():
-            if len(st) > 1 and shown < 8:
-                print(f"- `{env}` fp `{fp[:12]}..` -> {len(st)} states:")
+            if len(st) > 1 and shown < 12:
+                kind = classify_blind(st)
+                print(f"- `{env}` fp `{fp[:12]}..` [{kind.upper()}] -> {len(st)} states:")
                 for s in st:
-                    print(f"    count={s[0]} consumed={list(s[1])} chunked={list(s[2])} CL={list(s[3])}")
+                    print(f"    count={s[0]} consumed={list(s[1])} body={list(s[4])} "
+                          f"chunked={list(s[2])} CL={list(s[3])}")
                 shown += 1
     if not shown:
         print("(none)")

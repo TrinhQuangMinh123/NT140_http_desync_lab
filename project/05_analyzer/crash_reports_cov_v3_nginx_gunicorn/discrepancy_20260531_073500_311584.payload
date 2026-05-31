@@ -1,0 +1,13 @@
+GET / HTTP/1.1
+Host: localhost
+
+GET /second HTTP/1.1
+Host: localhost
+Connection: close
+
+POST / HTTP/1.1
+Host: localhost
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 11
+
+hello=world

@@ -1,0 +1,5 @@
+GET / HTTP/1.1
+Host: localhost
+Connection: codclose
+X-Desync-Id: 9a2f9c8e5e5f45a7a9736481b9792db9
+

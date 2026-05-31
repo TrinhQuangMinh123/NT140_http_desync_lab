@@ -1,0 +1,7 @@
+GET http://localhost/ HTTP/1.1
+Host: loca
+ABCDE
+0
+X-Secret: lealhost
+Connection: close
+

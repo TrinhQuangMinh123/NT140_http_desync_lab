@@ -1,0 +1,8 @@
+GET http://localhost/ HTTP/1.1
+Host: loca
+ABCDE
+0
+X-Secret: lealhost
+Connection: close
+X-Desync-Id: 4949e50b59634606b55a10025d562e60
+

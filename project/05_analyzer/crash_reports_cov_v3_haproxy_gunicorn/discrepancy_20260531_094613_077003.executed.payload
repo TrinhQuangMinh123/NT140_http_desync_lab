@@ -1,0 +1,11 @@
+POST / HTTP/1.1
+Host: localhost
+Transfer-Encoding: s-maxage
+Trailer: X-Secret
+X-Desync-Id: 78b2378012644ee8b7b1c2482cff8545
+
+5
+ABCDE
+0
+X-Secret: leaked
+

@@ -1,0 +1,10 @@
+POST / HTTP/1.1
+Host: localhost
+Content-Length: 00011
+
+hello=worldPOST / HTTP/1.1
+Host: localhost
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 11
+
+hello=world

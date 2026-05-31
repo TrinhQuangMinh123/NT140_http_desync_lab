@@ -1,0 +1,9 @@
+GET / HTTP/1.1
+Host: localhost
+
+GET /second HTTP/1.1
+Host: localhostCDE
+0
+X-Secret: le
+Connection: close
+

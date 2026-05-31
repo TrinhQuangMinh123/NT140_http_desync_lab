@@ -105,6 +105,16 @@ class StateTuple:
     consumed_real: Optional[list] = None
     content_length_real: Optional[list] = None
     chunked_real: Optional[list] = None
+    # B4b v2 — full HttpParam capture. body_length_real differs from consumed_real
+    # for chunked bodies (consumed counts framing bytes; body counts decoded
+    # payload) → `consumed - body` is a structural axis edge-coverage is blind to.
+    # status_real / order_real are documented struct fields NOT written by the
+    # request-side parser (surfaced verbatim, expected all-zero request-side).
+    body_length_real: Optional[list] = None
+    status_real: Optional[list] = None
+    order_real: Optional[list] = None
+    message_processed_raw: Optional[int] = None
+    message_count_raw: Optional[int] = None
     state_source: str = "wire-derived"
 
     # Extra context (not in HDHunter, but useful for reporting)

@@ -42,8 +42,12 @@ class ChunkedReader(object):
         ret, rest = data[:size], data[size:]
         self.buf = io.BytesIO()
         self.buf.write(rest)
-        # Chunked: count decoded body bytes. consumed≈body here (chunk framing
-        # bytes are not separately tallied — documented approximation, B4b v1).
+        # Chunked (B4b v2): decoded payload bytes count toward BOTH body and
+        # consumed. The chunk FRAMING bytes (size line + CRLFs + trailer) are
+        # tallied into `consumed` ONLY, inside parse_chunk_size/parse_chunked/
+        # parse_trailers below. So for chunked: consumed = body + framing, i.e.
+        # `consumed - body` = the wire framing overhead — a structural axis that
+        # edge-coverage is blind to (B8). For Content-Length, consumed == body.
         if _hdh is not None and ret:
             _hdh.hdhunter_inc_body_length(len(ret), _hdh.MODE_REQUEST)
             _hdh.hdhunter_inc_consumed_length(len(ret), _hdh.MODE_REQUEST)
@@ -60,8 +64,14 @@ class ChunkedReader(object):
             idx = buf.getvalue().find(b"\r\n\r\n")
             done = buf.getvalue()[:2] == b"\r\n"
         if done:
+            # Framing: the final bare CRLF closing a trailer-less chunked body.
+            if _hdh is not None:
+                _hdh.hdhunter_inc_consumed_length(2, _hdh.MODE_REQUEST)
             unreader.unread(buf.getvalue()[2:])
             return b""
+        # Framing: trailer header block + its closing \r\n\r\n.
+        if _hdh is not None:
+            _hdh.hdhunter_inc_consumed_length(idx + 4, _hdh.MODE_REQUEST)
         self.req.trailers = self.req.parse_headers(buf.getvalue()[:idx])
         unreader.unread(buf.getvalue()[idx + 4:])
 
@@ -81,6 +91,9 @@ class ChunkedReader(object):
                 rest += unreader.read()
             if rest[:2] != b'\r\n':
                 raise ChunkMissingTerminator(rest[:2])
+            # Framing: the 2-byte CRLF terminator after a chunk's payload.
+            if _hdh is not None:
+                _hdh.hdhunter_inc_consumed_length(2, _hdh.MODE_REQUEST)
             (size, rest) = self.parse_chunk_size(unreader, data=rest[2:])
 
     def parse_chunk_size(self, unreader, data=None):
@@ -95,6 +108,11 @@ class ChunkedReader(object):
 
         data = buf.getvalue()
         line, rest_chunk = data[:idx], data[idx + 2:]
+
+        # Framing: the chunk-size line itself + its trailing CRLF. Counted for
+        # EVERY chunk-size line, including the terminal "0" line.
+        if _hdh is not None:
+            _hdh.hdhunter_inc_consumed_length(idx + 2, _hdh.MODE_REQUEST)
 
         chunk_size = line.split(b";", 1)[0].strip()
         try:
