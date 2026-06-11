@@ -1,9 +1,0 @@
-GET / HTTP/1.1
-Host: Content-Security-Policy
-X-Desync-Id: 13c3585cd0804d0d93fba0903bafdee8
-
-GET /second HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: 417ce9abdbb84f8d8bee14b87e2af3ec
-

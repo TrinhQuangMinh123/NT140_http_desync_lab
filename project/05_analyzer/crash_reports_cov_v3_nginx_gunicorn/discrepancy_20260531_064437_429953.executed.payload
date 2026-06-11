@@ -1,6 +1,0 @@
-GET http://localhost/ HTTP/1.1
-Host: localhost
-Trailer: X-Secret
-Connection: close
-X-Desync-Id: a09d50d1c598471eab351b14bfd4bcc4
-

@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Transfer-Encoding: Access-Control-Allow-Headers
-X-Desync-Id: 83f824ef47af4b89992418339169f58e
-
-5;ext=evil
-ABCDE
-0
-

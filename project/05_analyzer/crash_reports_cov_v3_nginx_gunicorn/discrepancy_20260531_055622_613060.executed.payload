@@ -1,6 +1,0 @@
-POST / HTTP/1.1
-Content-Type: application/x-www-form-urlencoded
-Content-Length: 11
-X-Desync-Id: dfc40b00292d47bc86043fd3e7029bf8
-
-hello=world

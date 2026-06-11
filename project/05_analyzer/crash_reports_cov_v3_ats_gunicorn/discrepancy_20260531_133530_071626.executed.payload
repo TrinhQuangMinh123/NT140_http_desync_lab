@@ -1,7 +1,0 @@
-GET http://localhost/ HTTP/1.1
-Host: localhoP/1.1
-Host: localhost
-Transfer-Encoding:st
-Connection: close
-X-Desync-Id: 2c569d7f2da1435c841571b2f55503b2
-

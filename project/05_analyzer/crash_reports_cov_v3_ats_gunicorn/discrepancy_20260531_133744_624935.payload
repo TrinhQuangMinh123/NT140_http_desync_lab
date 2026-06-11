@@ -1,8 +1,0 @@
-POST / HTTP/1.1
-Host: Accept-CH
-Content-Length: 6
-Transfer-Encoding: chunked
-
-0
-
-X

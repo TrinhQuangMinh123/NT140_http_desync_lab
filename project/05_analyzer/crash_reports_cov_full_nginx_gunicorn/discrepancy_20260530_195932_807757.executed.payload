@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: ocalhost
-Transfer-Encoding: chunked
-X-Desync-Id: 3557904670b34a7b84b0128a6cfdb42e
-
-5;ext=evil
-ABCDE
-0
-

@@ -1,6 +1,0 @@
-GET / HTTP/1.1
-Host: lochost
-Calhost
-Connection: close
-X-Desync-Id: f60b92bb9d94416c8dfe7f045f605912
-

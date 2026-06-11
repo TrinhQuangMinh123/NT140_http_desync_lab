@@ -1,6 +1,0 @@
-GET http://localhost/ HTTP/1.1
-Host: localhost
-C
-hello=worldonnection: close
-X-Desync-Id: 2a455afa993d479ba74d425dbf896225
-

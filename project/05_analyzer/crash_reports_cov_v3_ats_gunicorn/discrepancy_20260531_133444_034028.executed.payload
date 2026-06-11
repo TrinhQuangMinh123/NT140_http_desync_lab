@@ -1,5 +1,0 @@
-GET http://localhost/ HTTP/1.1
-Host: loalhost
-Connection: close
-X-Desync-Id: c6f5a9696a8a45e6848b8bc2d27c61cb
-

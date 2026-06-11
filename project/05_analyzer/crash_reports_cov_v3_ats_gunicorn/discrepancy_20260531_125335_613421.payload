@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Transfer-Encoding:
-Transfer-Encoding: chunked
-
-5;ext=evil
-ABCDE
-0
-

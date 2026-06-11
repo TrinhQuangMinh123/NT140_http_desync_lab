@@ -1,7 +1,0 @@
-GET / HTTP/1.1
-Host: Strict-Transport-Security
-
-GET /second HTTP/1.1
-Host: localhost
-Connection: close
-

@@ -1,9 +1,0 @@
-GET / HTTP/1.1
-Host: gzip
-X-Desync-Id: 092c69fd329a4afab04381d13ddd40b1
-
-GET /second HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: 61b03116c59b4835b6ae1f95e270a8b1
-

@@ -1,8 +1,0 @@
-GET / HTTP/1.1
-Host: localhost
-X-Desync-Id: f5fbb3a340704ab6ab70d260659aa301
-
-GET /second H: application/x-www-form-urlencodedTTP/1.1
-Host: localhost
-Connection: close
-

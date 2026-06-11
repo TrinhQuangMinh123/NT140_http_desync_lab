@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Te: application/x-www-form-urlencoded
-Content-Lenransfer-Encoding: chunked
-
-5;ext=evil
-ABCDE
-0
-

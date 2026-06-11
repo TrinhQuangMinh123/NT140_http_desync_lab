@@ -1,14 +1,0 @@
-GET / HTTP/1.1
-Host: localhost
-
-GET /second HTTP/1.1
-Ho
-Host: localhost
-Transfer-Encoding: chunked
-
-b
-hello=world
-0
-st: localhost
-Connection: close
-

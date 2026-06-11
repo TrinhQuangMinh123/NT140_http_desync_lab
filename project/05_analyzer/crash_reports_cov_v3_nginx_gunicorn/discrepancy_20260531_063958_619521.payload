@@ -1,9 +1,0 @@
-GET / HTTP/1.1
-Host: localhost
-Con: localhost
-Transfer-Encoding: chunked
-
-b
-hello=world
-0nection: close
-

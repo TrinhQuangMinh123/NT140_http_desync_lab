@@ -1,5 +1,0 @@
-GET hættp://localhost/ HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: d338c0c0fdf74e9283a7e7d4dad5166d
-

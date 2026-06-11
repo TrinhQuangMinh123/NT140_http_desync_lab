@@ -1,5 +1,0 @@
-GET http://localhostontent-Leng/ HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: ed7e09c29e3f4bacb64938e94e394676
-

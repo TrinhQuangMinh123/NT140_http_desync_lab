@@ -1,9 +1,0 @@
-GET / HTTP/1.1
-Host: localhost
-
-GET /second HTTP/1.1
-Host: localhost
-Connection: gth: 00011
-
-hello=worldclose
-

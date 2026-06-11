@@ -1,5 +1,0 @@
-GET / HTTP/1.1
-Host: loclhost
-Connection: close
-X-Desync-Id: fbda750e146242d1ab08fc46ac4f8bb9
-

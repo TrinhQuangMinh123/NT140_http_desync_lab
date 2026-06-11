@@ -1,4 +1,0 @@
-GET / HTTP/1.1
-Connection: close
-X-Desync-Id: 4df60319b0ab43b5a1924a608461624e
-

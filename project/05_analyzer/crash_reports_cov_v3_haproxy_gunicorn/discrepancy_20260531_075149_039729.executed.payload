@@ -1,8 +1,0 @@
-GET / HTTP/1.1
-Host: locHost: localhost
-Content-Length: 4
-Transfer-Encoding:
- chunkalhost
-Connection: close
-X-Desync-Id: c14c18c56edb4fb9b5918312c9b7ceab
-

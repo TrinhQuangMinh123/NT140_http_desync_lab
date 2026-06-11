@@ -1,6 +1,0 @@
-POST / HTTP/1.1
-Host: localh=worost
-Content-Length: 00011
-X-Desync-Id: df10cec46ec2465fbe6a4d0b9cae7a12
-
-hello=world

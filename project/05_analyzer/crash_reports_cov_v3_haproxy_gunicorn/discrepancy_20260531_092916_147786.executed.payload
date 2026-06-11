@@ -1,10 +1,0 @@
-GET / HTTP/1.1
-Host: localhost
-Con: localhost
-Transfer-Encoding: chunked
-X-Desync-Id: 4080eaf1f4524a98b777f66c9967cb97
-
-b
-hello=world
-0nection: close
-

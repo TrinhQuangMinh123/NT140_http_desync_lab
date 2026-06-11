@@ -1,4 +1,0 @@
-GET http://localhost/ HTTP/1.11
-Host: localhost
-Connection: close
-

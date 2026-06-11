@@ -1,7 +1,0 @@
-GET / HTTP/1.1
-Host: locasfer-Encoding: chunked
-X-Desync-Id: fc09cfb68f9b418199601e796d25e25f
-
-5;ext=evilhost
-Connection: close
-

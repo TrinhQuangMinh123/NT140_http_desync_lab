@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: Accept-CH
-Content-Length: 6
-Transfer-Encoding: chunked
-X-Desync-Id: 52e947a77f4a43af92b9a02c7200d078
-
-0
-
-X

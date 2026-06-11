@@ -1,8 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Transfer-Encoding: POST
-
-b
-hello=world
-0
-

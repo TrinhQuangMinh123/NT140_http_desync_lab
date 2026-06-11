@@ -1,7 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Content-Type: application/x-www-form-urlencoded
-Content-Length 	 : 11
-X-Desync-Id: 71aed5887d8342bba508e9e1309869b4
-
-hello=world

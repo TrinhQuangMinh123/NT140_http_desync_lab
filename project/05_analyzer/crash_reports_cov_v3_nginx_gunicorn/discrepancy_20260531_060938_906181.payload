@@ -1,6 +1,0 @@
-GET / HTTP/1.10
-
-
-Host: localhost
-Connection: close
-

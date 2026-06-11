@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: Want-Content-Digest
-Content-Length: 6
-Transfer-Encoding: chunked
-X-Desync-Id: 42dbd09f1f3f432baf8a7a3dd1b2a3f4
-
-0
-
-X

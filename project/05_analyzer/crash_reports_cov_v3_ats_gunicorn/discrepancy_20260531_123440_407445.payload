@@ -1,7 +1,0 @@
-POST / HTTP/1.1
-Host:ABCDE
-0
-X-Secret: leaked localhost
-Content-Length: 00011
-
-hello=world

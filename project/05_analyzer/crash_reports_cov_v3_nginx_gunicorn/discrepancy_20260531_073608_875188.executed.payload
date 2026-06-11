@@ -1,6 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Content-Length: 00011
-X-Desync-Id: 6debd3e234d347cd91ec96868f946568
-
-helloo=world

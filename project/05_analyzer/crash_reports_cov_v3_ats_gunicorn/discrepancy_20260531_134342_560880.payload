@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Transfer-Encoding: chu localhost
-Conked
-
-5;ext=evil
-ABCDE
-0
-

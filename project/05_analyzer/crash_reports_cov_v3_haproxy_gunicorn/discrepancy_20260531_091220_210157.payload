@@ -1,5 +1,0 @@
-POST / HTTP/1.1
-Host: localhostê
-Content-Length: 00011
-
-hello=world

@@ -1,5 +1,0 @@
-GET / HTTP/1.1
-Host: localnsfer-Encodihost
-Connection: close
-X-Desync-Id: 9840e7a51fd94d17b210018e7ca4ca43
-

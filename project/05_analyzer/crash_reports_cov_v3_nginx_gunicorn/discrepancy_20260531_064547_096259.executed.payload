@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Content-Length: GET
-Transfer-Encoding: chunked
-X-Desync-Id: b16e5fccd0c0414395c805863c00c435
-
-0
-
-X

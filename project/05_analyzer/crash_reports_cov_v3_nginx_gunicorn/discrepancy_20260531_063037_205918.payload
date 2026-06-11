@@ -1,4 +1,0 @@
-GET http://localhostontent-Leng/ HTTP/1.1
-Host: localhost
-Connection: close
-

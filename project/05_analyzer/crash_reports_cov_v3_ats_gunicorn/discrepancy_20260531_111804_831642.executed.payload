@@ -1,11 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Transfer-Encoding: chunked
-Trailer: X-Secret
-X-Desync-Id: 4bfafda00d3a45a1a807653b10d70c00
-
-5
-ABCDE
-0
-X-Secret: leaked
-

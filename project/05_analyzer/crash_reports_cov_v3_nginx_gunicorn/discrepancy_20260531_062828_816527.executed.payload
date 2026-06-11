@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Transfer-Encoding: 1_0
-X-Desync-Id: 8e03fa78945e4c359e37f48410c7dff3
-
-b
-hello=world
-0
-

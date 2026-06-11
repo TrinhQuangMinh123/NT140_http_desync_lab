@@ -1,9 +1,0 @@
-GET / HTTP/1.1
-Host: Set-Cookie
-X-Desync-Id: 6d15ad044b0d42dabe71b6a8680c964a
-
-GET /second HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: 6199bffc8a1b44d99929bfe36372b719
-

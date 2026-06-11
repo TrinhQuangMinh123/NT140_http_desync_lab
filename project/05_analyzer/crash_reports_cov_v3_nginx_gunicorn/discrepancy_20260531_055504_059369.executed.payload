@@ -1,9 +1,0 @@
-PRI * HTTP/2.0
-
-SM
-
-GET / HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: e4dbd8d7860147479bc4eaf1ea9fa97b
-

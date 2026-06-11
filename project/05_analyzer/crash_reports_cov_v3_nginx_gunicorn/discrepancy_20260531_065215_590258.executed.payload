@@ -1,6 +1,0 @@
-POST / HTTP/1.1
-Hfer-ost: localhost
-Content-Length: 00011
-X-Desync-Id: 653dc5285c5c47bea159f2010b6612bd
-
-hello=world

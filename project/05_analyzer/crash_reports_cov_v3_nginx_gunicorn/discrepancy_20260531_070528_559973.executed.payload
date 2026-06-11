@@ -1,9 +1,0 @@
-GET / HTTP/1.1
-Host: s-maxage
-X-Desync-Id: a99ed00c2b4f4394bccbaa1585b7f420
-
-GET /second HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: c32be691594b40debbacaec406dee2c5
-

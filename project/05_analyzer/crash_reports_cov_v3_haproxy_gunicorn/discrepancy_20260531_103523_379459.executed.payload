@@ -1,9 +1,0 @@
-GET / HTTP/1.1
-Host: localhost
-X-Desync-Id: 58d2910cecc64c0395c71a98ded0c64c
-
-GET /second HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: c7ea37be3f4843ce949f7bdff8862aa6
-

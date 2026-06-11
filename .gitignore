@@ -16,3 +16,17 @@ output/
 Thumbs.db
 *Zone.Identifier
 *:Zone.Identifier
+
+# Generated experiment artifacts
+project/05_analyzer/crash_reports_*/
+project/05_analyzer/trace_*.jsonl
+project/05_analyzer/_full_analysis.txt
+project/05_analyzer/triage_*.txt
+project/outputs/
+project/slide/
+project/slides/
+project/docx_output.txt
+project/usenixsecurity25-mu.docx
+project/slide.txt
+project/slide2.txt
+answer.md

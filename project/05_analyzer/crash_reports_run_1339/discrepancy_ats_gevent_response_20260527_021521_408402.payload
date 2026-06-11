@@ -1,9 +1,0 @@
-HTTP/1.1 200 OK
-Content-Type: text/plain
-Transfer-Encoding: chunked
-Content-Length: 5
-
-c
-Hello worrld!
-0
-

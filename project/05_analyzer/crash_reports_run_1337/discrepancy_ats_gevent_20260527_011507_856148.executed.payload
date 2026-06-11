@@ -1,5 +1,0 @@
-GEdT http://localhost/ HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: f4620eb5f442498b8c3edae648395398
-

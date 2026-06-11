@@ -1,9 +1,0 @@
-GET / HTTP/1.1
-Host: Sec-CH-UA-Mobile
-X-Desync-Id: a4bbd9278c724368a6adf1da22bd26ff
-
-GET /second HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: e73fab7889b84b8e8902192c4b48ff3d
-

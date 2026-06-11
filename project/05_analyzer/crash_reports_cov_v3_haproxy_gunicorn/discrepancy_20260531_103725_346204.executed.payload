@@ -1,6 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Content-Length: +10
-X-Desync-Id: cc0dee79e906487a80b4e9dfe8592d96
-
-hello=world

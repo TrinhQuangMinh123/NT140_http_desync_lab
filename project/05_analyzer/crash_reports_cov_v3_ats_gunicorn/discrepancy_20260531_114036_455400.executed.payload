@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Transfer-Encoding: Device-Memory
-X-Desync-Id: cb0ac46d7cd3443399220dd246c60a58
-
-5;ext=evil
-ABCDE
-0
-

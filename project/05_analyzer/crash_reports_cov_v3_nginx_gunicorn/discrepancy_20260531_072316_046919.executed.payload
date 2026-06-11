@@ -1,7 +1,0 @@
-GET / HTTP/1.1
-Host: localhost
-Transfer-Encoding: chunked
-Host: localhost
-Connection: close
-X-Desync-Id: ffd1d181f2cb421ea8e2e9004ebead99
-

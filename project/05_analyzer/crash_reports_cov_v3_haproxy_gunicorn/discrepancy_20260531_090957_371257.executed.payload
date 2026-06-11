@@ -1,9 +1,0 @@
-GET / HTTP/1.1
-Host: Sec-Browsing-Topics
-X-Desync-Id: 32fe04b7ae7a47cf8b5ce1dc43cd2457
-
-GET /second HTTP/1.1
-Host: localhost
-Connection: close
-X-Desync-Id: a17796f2691a408081a933f5248c263a
-

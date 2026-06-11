@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-Transfer-Encoding: Alt-Svc
-X-Desync-Id: 952523c0e0624023b5408bd403536a2f
-
-5;ext=evil
-ABCDE
-0
-

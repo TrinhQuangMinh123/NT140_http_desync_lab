@@ -1,9 +1,0 @@
-POST / HTTP/1.1
-Transfer-Encoding: chunked
-Trailer: X-Secret
-Host: localhost
-Content-Type: application/x-www-form-urlencoded
-Content-Length: 11
-X-Desync-Id: 9de3b19dc0e34a53af036e6b7411cfcb
-
-hello=world

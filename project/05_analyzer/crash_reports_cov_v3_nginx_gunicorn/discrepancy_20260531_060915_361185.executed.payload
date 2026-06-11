@@ -1,5 +1,0 @@
-POST / HTTP/1.1
-Content-Length: 00011
-X-Desync-Id: b0649cfdbdff4fae9ea0f45f285f08c4
-
-hello=world

@@ -1,8 +1,0 @@
-POST / HTTP/1.1
-Host: localhost
-X-Desync-Id: 68a96cb3934a49ff840fd085efa9e5bb
-
-5;ext=evil
-ABCDE
-0
-
